@@ -19,13 +19,17 @@ function agentRecordId(rec) {
   return rec.id ?? rec._id ?? rec.entityId ?? null
 }
 
+function registerNameForBrand(brand) {
+  return `content-agent-${brand.toLowerCase()}`
+}
+
 async function registerAgents() {
   const endpoint_url =
     process.env.AGENT_PUBLIC_URL || `http://localhost:${PORT}`
 
   for (const brand of BRANDS) {
     const rec = await base44.registerAgent({
-      name: 'content-agent',
+      name: registerNameForBrand(brand),
       brand,
       status: 'idle',
       endpoint_url

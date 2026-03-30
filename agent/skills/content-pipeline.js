@@ -1,8 +1,9 @@
 import * as base44 from '../lib/base44.js'
 
 export async function runForBrand(brand) {
+  const agentName = `content-agent-${brand.toLowerCase()}`
   await base44.log(
-    'content-agent',
+    agentName,
     brand,
     'info',
     `Starting pipeline for ${brand}`
@@ -13,7 +14,7 @@ export async function runForBrand(brand) {
   // TODO: Phase 4 - create Google Doc
   // TODO: Phase 5 - POST to Base44
   await base44.log(
-    'content-agent',
+    agentName,
     brand,
     'success',
     `Pipeline complete for ${brand} (stub)`

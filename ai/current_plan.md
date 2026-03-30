@@ -1,28 +1,26 @@
 # Current Plan
 
-## Status: Phase 0 Complete — Starting Phase 1 (Dashboard)
+## Status: Phase 1 done (dashboard shell). Phase 2 — agent Express + Base44 integration (in progress / verify on droplet).
 
 ## Done
-- [x] Supabase project created (https://umvmnardjwaguswwzxad.supabase.co)
-- [x] Schema SQL run — all 5 tables created (jobs, scan_results, seo_snapshots, content_topics, chat_messages)
-- [x] Realtime enabled on all tables
-- [x] RLS disabled on all tables
-- [x] GitHub repo created, cloned locally, opened in Cursor
-- [x] Folder structure scaffolded
-- [x] AI context files filled in
+- [x] Supabase project (https://umvmnardjwaguswwzxad.supabase.co)
+- [x] Schema — tables: `jobs`, `scan_results`, `seo_snapshots`, `content_topics`, `chat_messages`
+- [x] Realtime on tables; RLS off
+- [x] Repo scaffold: `/dashboard`, `/agent`
+- [x] **Dashboard** — Next.js app with Supabase anon client (`lib/supabase.js`), main page with Docket-styled header, tabs (Security / SEO / Content / Chat), placeholder tab content, bottom Job Feed (last 20 `jobs`, Realtime INSERT/UPDATE), header connection indicator
+- [x] **Agent (Phase 1, superseded)** — polling `jobs` in Supabase; replaced by Phase 2 below
 
-## In Progress
-- [ ] Dashboard — Next.js scaffold inside /dashboard
+## Phase 2 — Agent: Express + Base44 (complete when this runs without errors)
+- [x] **Agent** — Express: `GET /health`, `POST /run` (non-blocking), `GET /status`; `node-cron` Monday 8:00 AM `America/New_York` → content pipeline for Docket then ServiceCore; startup `registerAgent` for both brands; `lib/base44.js` (axios, Agent / AgentLog / BlogPost entities); `lib/google.js` + `lib/claude.js`; `skills/content-pipeline.js` stub; `.env.example`; no Supabase in agent process (dashboard still uses Supabase)
+- [ ] **Verify:** droplet or local — `npm start`, hit `/health` and `/status`, `POST /run` completes stub pipeline; Base44 shows Agent upserts and logs
 
-## Up Next
-1. Initialize Next.js in /dashboard
-2. Install @supabase/supabase-js
-3. Wire up Supabase client with anon key
-4. Build dashboard shell with 4 tabs (Security, SEO, Content, Chat)
-5. Wire up Realtime job feed (reads from jobs table, live updates)
-6. Deploy to Vercel
+## In Progress / Up Next
+1. **Deploy dashboard** to Vercel (env: `NEXT_PUBLIC_SUPABASE_*`)
+2. **Agent on droplet:** clone repo, `.env` (Anthropic, Google, Base44, `AGENT_PUBLIC_URL`, etc.), `pm2 start npm --name marketing-agent -- start`
+3. **Content pipeline:** implement GSC + GA4 + Sheets + Claude + Docs + `createBlogPost` (stubs removed step by step)
+4. **Other skills (order):** Security scan → GA4 → GSC → content — as needed for broader marketing agent
 
-## After Dashboard
-- Agent skeleton in /agent
-- Smoke test: agent inserts a job → dashboard shows it live
-- Then skills one at a time: Security → GA4 → GSC → Content Pipeline
+## Later
+- Chat tab backed by `chat_messages` + Claude
+- Security / SEO / Content tabs wired to their tables
+- GA/GSC credentials and OAuth where required

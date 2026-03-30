@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const BASE_URL = 'https://api.base44.com'
+const BASE_URL =
+  process.env.BASE44_API_BASE_URL || 'https://app.base44.com'
 
 function getAppId() {
   return process.env.BASE44_APP_ID || '69c933514906e97b30004421'

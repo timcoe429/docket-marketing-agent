@@ -32,21 +32,34 @@ function agentNameFor(brand) {
   return `content-agent-${brand.toLowerCase()}`
 }
 
+/** xml2js may return a single child as an object or repeated children as an array */
+function toArray(x) {
+  if (x == null) return []
+  return Array.isArray(x) ? x : [x]
+}
+
+function normalizeLoc(loc) {
+  if (loc == null) return ''
+  if (Array.isArray(loc)) {
+    const first = loc[0]
+    return first != null ? String(first).trim() : ''
+  }
+  return String(loc).trim()
+}
+
 function parseSitemapDocument(parsed) {
   const pageUrls = []
   const childSitemaps = []
-  const urlsets = parsed.urlset ?? []
-  for (const urlset of urlsets) {
-    for (const u of urlset.url ?? []) {
-      const loc = u.loc?.[0]
-      if (loc) pageUrls.push(String(loc).trim())
+  for (const urlset of toArray(parsed.urlset)) {
+    for (const u of toArray(urlset.url)) {
+      const loc = normalizeLoc(u.loc)
+      if (loc) pageUrls.push(loc)
     }
   }
-  const indexes = parsed.sitemapindex ?? []
-  for (const idx of indexes) {
-    for (const s of idx.sitemap ?? []) {
-      const loc = s.loc?.[0]
-      if (loc) childSitemaps.push(String(loc).trim())
+  for (const idx of toArray(parsed.sitemapindex)) {
+    for (const s of toArray(idx.sitemap)) {
+      const loc = normalizeLoc(s.loc)
+      if (loc) childSitemaps.push(loc)
     }
   }
   return { pageUrls, childSitemaps }
@@ -80,7 +93,7 @@ export async function collectPageUrlsFromSitemaps(startUrl, maxUrls) {
 
     const xml = await fetchXml(sitemapUrl)
     const parsed = await parseStringPromise(xml, {
-      explicitArray: true,
+      explicitArray: false,
       trim: true
     })
     const { pageUrls: direct, childSitemaps } = parseSitemapDocument(parsed)

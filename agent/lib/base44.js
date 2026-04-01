@@ -201,10 +201,15 @@ export async function createContentAction({
 }) {
   try {
     const path = entityPath('ContentAction')
+    const urlsPayload = Array.isArray(affected_urls)
+      ? JSON.stringify(affected_urls)
+      : typeof affected_urls === 'string'
+        ? affected_urls
+        : JSON.stringify([])
     const body = {
       brand,
       action_type,
-      affected_urls,
+      affected_urls: urlsPayload,
       recommendation,
       reasoning,
       seo_impact,

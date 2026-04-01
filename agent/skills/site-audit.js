@@ -148,9 +148,9 @@ export async function runAuditForBrand(brand) {
       brand,
       audit_date: auditDateIso(),
       summary: report.summary,
-      pillar_map: report.pillar_map,
-      content_gaps: report.content_gaps,
-      action_items: report.action_items,
+      pillar_map: JSON.stringify(report.pillar_map),
+      content_gaps: JSON.stringify(report.content_gaps),
+      action_items: JSON.stringify(report.action_items),
       status: 'active'
     })
 

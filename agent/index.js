@@ -2,10 +2,14 @@ import 'dotenv/config'
 import express from 'express'
 import cron from 'node-cron'
 import * as base44 from './lib/base44.js'
-import { runForBrand } from './skills/content-pipeline.js'
+import {
+  BRANDS as BRAND_CONFIG,
+  publishToWordPress,
+  runForBrand
+} from './skills/content-pipeline.js'
 
 const PORT = Number(process.env.PORT) || 3000
-const BRANDS = ['Docket', 'ServiceCore']
+const BRANDS = Object.keys(BRAND_CONFIG)
 
 let currentStatus = 'idle'
 let lastRun = null
@@ -91,6 +95,32 @@ app.get('/health', (_req, res) => {
 app.post('/run', (_req, res) => {
   void runPipeline()
   res.json({ ok: true, message: 'Pipeline started' })
+})
+
+app.post('/run/publish', async (req, res) => {
+  try {
+    const { blogPostId, brand } = req.body ?? {}
+    if (blogPostId == null || blogPostId === '') {
+      return res.status(400).json({ ok: false, error: 'blogPostId required' })
+    }
+    if (!brand || !BRAND_CONFIG[brand]) {
+      return res.status(400).json({ ok: false, error: 'Invalid brand' })
+    }
+    const result = await publishToWordPress(String(blogPostId), brand)
+    if (!result.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: result.error || 'Publish failed'
+      })
+    }
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('POST /run/publish:', err)
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err)
+    })
+  }
 })
 
 app.get('/status', (_req, res) => {

@@ -100,22 +100,55 @@ export async function createBlogPost({
   title,
   brand,
   keyword,
+  content,
+  meta_description,
   google_doc_url,
   status = 'draft'
 }) {
   try {
     const path = entityPath('BlogPost')
-    const { data } = await client.post(path, {
+    const body = {
       title,
       brand,
       keyword,
-      google_doc_url,
+      content,
+      meta_description,
       status
-    })
-    return data ?? { title, brand, keyword, google_doc_url, status }
+    }
+    if (google_doc_url != null) body.google_doc_url = google_doc_url
+    const { data } = await client.post(path, body)
+    return data ?? body
   } catch (err) {
     console.error(
       '[base44] createBlogPost failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function getBlogPost(id) {
+  try {
+    const path = `${entityPath('BlogPost')}/${id}`
+    const { data } = await client.get(path)
+    return data ?? null
+  } catch (err) {
+    console.error(
+      '[base44] getBlogPost failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function updateBlogPost(id, fields) {
+  try {
+    const path = `${entityPath('BlogPost')}/${id}`
+    const { data } = await client.put(path, fields)
+    return data ?? { id, ...fields }
+  } catch (err) {
+    console.error(
+      '[base44] updateBlogPost failed:',
       err.response?.data ?? err.message
     )
     return null

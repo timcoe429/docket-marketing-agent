@@ -15,6 +15,52 @@ function auditDateIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
+/** @param {{ keyword?: string } | null | undefined} row */
+function gscKeywordKey(row) {
+  if (!row || typeof row.keyword !== 'string') return ''
+  return row.keyword.trim().toLowerCase()
+}
+
+/**
+ * Reduce GSC rows for the audit model: top 200 by impressions, plus up to 200
+ * more striking-distance rows (deduped), max 300 total.
+ * @param {Array<{ keyword: string, clicks?: number, impressions?: number, ctr?: number, position?: number }>} rows
+ */
+function trimGscAuditKeywords(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return []
+
+  const topByImpressions = [...rows].sort(
+    (a, b) => (b.impressions ?? 0) - (a.impressions ?? 0)
+  )
+  const top200 = topByImpressions.slice(0, 200)
+  const seen = new Set()
+  for (const r of top200) {
+    const k = gscKeywordKey(r)
+    if (k) seen.add(k)
+  }
+
+  const striking = rows.filter(
+    (r) =>
+      (r.position ?? 0) >= 4 &&
+      (r.position ?? 0) <= 20 &&
+      (r.impressions ?? 0) >= 50
+  )
+  striking.sort(
+    (a, b) => (b.impressions ?? 0) - (a.impressions ?? 0)
+  )
+
+  const extra = []
+  for (const r of striking) {
+    if (extra.length >= 200) break
+    const k = gscKeywordKey(r)
+    if (!k || seen.has(k)) continue
+    seen.add(k)
+    extra.push(r)
+  }
+
+  return [...top200, ...extra].slice(0, 300)
+}
+
 /**
  * Monthly site audit for one brand. Never throws.
  * @param {string} brand
@@ -66,12 +112,14 @@ export async function runAuditForBrand(brand) {
     }
     await base44.log(agent, brand, 'info', `Pulled top ${ga4.length} pages from GA4`)
 
+    const gscForAudit = trimGscAuditKeywords(gsc)
+
     const report = await generateSiteAuditJson({
       brand,
       brandDescription: brandCtx.brandDescription,
       pillarNames,
       pages,
-      gscKeywords: gsc,
+      gscKeywords: gscForAudit,
       ga4Pages: ga4,
       gscNote,
       ga4Note

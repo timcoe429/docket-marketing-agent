@@ -246,6 +246,66 @@ IMPORTANT RULES:
 - Do NOT recommend writing posts that already exist on the site`
 }
 
+const MAX_SITE_AUDIT_PAGES = 150
+
+function normalizePathForTrafficMatch(path) {
+  if (typeof path !== 'string') return ''
+  let p = path.trim()
+  if (!p.startsWith('/')) p = `/${p}`
+  p = p.split('?')[0].replace(/\/+$/, '')
+  return (p || '/').toLowerCase()
+}
+
+/**
+ * @param {Array<{ page?: string, sessions?: number }>} ga4Pages
+ * @returns {Map<string, number>}
+ */
+function buildPathSessionsMap(ga4Pages) {
+  const m = new Map()
+  for (const row of ga4Pages || []) {
+    const path = row?.page
+    if (typeof path !== 'string' || !path.trim()) continue
+    const key = normalizePathForTrafficMatch(path)
+    const s = Number(row.sessions) || 0
+    m.set(key, Math.max(m.get(key) || 0, s))
+  }
+  return m
+}
+
+/**
+ * @param {string} pageUrl
+ * @param {Map<string, number>} pathSessions
+ */
+function sessionsForCrawledPageUrl(pageUrl, pathSessions) {
+  try {
+    const u = new URL(pageUrl)
+    const key = normalizePathForTrafficMatch(u.pathname)
+    return pathSessions.get(key) ?? 0
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Highest GA4 sessions first (path matched to crawled URL pathname), max 150 pages.
+ * @param {object[]} pages — crawl rows with `url`
+ * @param {object[]} ga4Pages
+ */
+function capPagesForSiteAudit(pages, ga4Pages) {
+  if (!Array.isArray(pages) || pages.length === 0) return []
+  const pathSessions = buildPathSessionsMap(ga4Pages)
+  if (pathSessions.size === 0) {
+    return pages.slice(0, MAX_SITE_AUDIT_PAGES)
+  }
+  return [...pages]
+    .sort(
+      (a, b) =>
+        sessionsForCrawledPageUrl(String(b?.url ?? ''), pathSessions) -
+        sessionsForCrawledPageUrl(String(a?.url ?? ''), pathSessions)
+    )
+    .slice(0, MAX_SITE_AUDIT_PAGES)
+}
+
 /**
  * @param {{
  *   brand: string,
@@ -271,8 +331,10 @@ export async function generateSiteAuditJson(ctx) {
     pillarsJoined
   )
 
+  const pagesForAudit = capPagesForSiteAudit(ctx.pages, ctx.ga4Pages)
+
   const payload = {
-    existing_pages: ctx.pages,
+    existing_pages: pagesForAudit,
     gsc_keywords: ctx.gscKeywords,
     top_ga4_pages: ctx.ga4Pages,
     data_notes: {

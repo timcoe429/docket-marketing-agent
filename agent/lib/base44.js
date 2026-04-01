@@ -158,3 +158,176 @@ export async function updateBlogPost(id, fields) {
     return null
   }
 }
+
+export async function createSiteAudit({
+  brand,
+  audit_date,
+  summary,
+  pillar_map,
+  content_gaps,
+  action_items,
+  status = 'active'
+}) {
+  try {
+    const path = entityPath('SiteAudit')
+    const body = {
+      brand,
+      audit_date,
+      summary,
+      pillar_map,
+      content_gaps,
+      action_items,
+      status
+    }
+    const { data } = await client.post(path, body)
+    return data ?? body
+  } catch (err) {
+    console.error(
+      '[base44] createSiteAudit failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function createContentAction({
+  brand,
+  action_type,
+  affected_urls,
+  recommendation,
+  reasoning,
+  seo_impact,
+  status = 'pending'
+}) {
+  try {
+    const path = entityPath('ContentAction')
+    const body = {
+      brand,
+      action_type,
+      affected_urls,
+      recommendation,
+      reasoning,
+      seo_impact,
+      status
+    }
+    const { data } = await client.post(path, body)
+    return data ?? body
+  } catch (err) {
+    console.error(
+      '[base44] createContentAction failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function createPlannedPost({
+  brand,
+  title,
+  keyword,
+  type,
+  pillar,
+  reasoning,
+  estimated_impact,
+  priority,
+  status = 'planned'
+}) {
+  try {
+    const path = entityPath('PlannedPost')
+    const body = {
+      brand,
+      title,
+      keyword,
+      type,
+      pillar,
+      reasoning,
+      estimated_impact,
+      priority,
+      status
+    }
+    const { data } = await client.post(path, body)
+    return data ?? body
+  } catch (err) {
+    console.error(
+      '[base44] createPlannedPost failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+/**
+ * Highest-priority planned post for the brand (lower priority number = first).
+ */
+export async function getTopPlannedPost(brand) {
+  try {
+    const path = entityPath('PlannedPost')
+    const { data: raw } = await client.get(path)
+    const list = normalizeList(raw)
+    const planned = list.filter(
+      (row) =>
+        row &&
+        row.brand === brand &&
+        String(row.status || '').toLowerCase() === 'planned'
+    )
+    planned.sort((a, b) => {
+      const pa = Number(a.priority)
+      const pb = Number(b.priority)
+      const na = Number.isFinite(pa) ? pa : 9999
+      const nb = Number.isFinite(pb) ? pb : 9999
+      return na - nb
+    })
+    return planned[0] ?? null
+  } catch (err) {
+    console.error(
+      '[base44] getTopPlannedPost failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function updatePlannedPost(id, fields) {
+  try {
+    const path = `${entityPath('PlannedPost')}/${id}`
+    const { data } = await client.put(path, fields)
+    return data ?? { id, ...fields }
+  } catch (err) {
+    console.error(
+      '[base44] updatePlannedPost failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function archiveOldAudits(brand) {
+  try {
+    const path = entityPath('SiteAudit')
+    const { data: raw } = await client.get(path)
+    const list = normalizeList(raw)
+    const active = list.filter(
+      (row) =>
+        row &&
+        row.brand === brand &&
+        String(row.status || '').toLowerCase() === 'active'
+    )
+    for (const row of active) {
+      const id = recordId(row)
+      if (!id) continue
+      try {
+        await client.put(`${path}/${id}`, { status: 'archived' })
+      } catch (err) {
+        console.error(
+          '[base44] archiveOldAudits row failed:',
+          err.response?.data ?? err.message
+        )
+      }
+    }
+  } catch (err) {
+    console.error(
+      '[base44] archiveOldAudits failed:',
+      err.response?.data ?? err.message
+    )
+  }
+}

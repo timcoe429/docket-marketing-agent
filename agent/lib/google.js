@@ -65,6 +65,46 @@ export async function getGSCData(siteUrl) {
   )
 }
 
+/**
+ * Full GSC query export for site audits: positions 1–100 (no striking-distance filter).
+ * @param {string} siteUrl
+ * @returns {Promise<Array<{ keyword: string, clicks: number, impressions: number, ctr: number, position: number }>>}
+ */
+export async function getGSCAuditData(siteUrl) {
+  if (!process.env.GOOGLE_REFRESH_TOKEN) {
+    throw new Error('GSC: GOOGLE_REFRESH_TOKEN is not set')
+  }
+
+  const searchconsole = google.searchconsole({ version: 'v1', auth: oauth2Client })
+  const { startDate, endDate } = gscDateRange()
+
+  const res = await searchconsole.searchanalytics.query({
+    siteUrl,
+    requestBody: {
+      startDate,
+      endDate,
+      dimensions: ['query'],
+      rowLimit: 25000
+    }
+  })
+
+  const rows = res.data.rows ?? []
+  const mapped = rows.map((row) => ({
+    keyword: row.keys?.[0] ?? '',
+    clicks: row.clicks ?? 0,
+    impressions: row.impressions ?? 0,
+    ctr: row.ctr ?? 0,
+    position: row.position ?? 0
+  }))
+
+  return mapped.filter(
+    (r) =>
+      r.keyword.length > 0 &&
+      r.position >= 1 &&
+      r.position <= 100
+  )
+}
+
 function ga4DateRange() {
   const end = new Date()
   end.setUTCDate(end.getUTCDate() - 3)
@@ -92,14 +132,21 @@ function getGA4Client() {
  * @param {string} propertyId — numeric GA4 property id
  * @returns {Promise<Array<{ page: string, sessions: number, users: number, conversions: number }>>}
  */
-async function runGa4Report(client, propertyId, startDate, endDate, metrics) {
+async function runGa4Report(
+  client,
+  propertyId,
+  startDate,
+  endDate,
+  metrics,
+  limit = 50
+) {
   return client.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: 'pagePath' }],
     metrics,
     orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
-    limit: 50
+    limit
   })
 }
 
@@ -118,7 +165,12 @@ function mapGa4Rows(response, conversionsIndex) {
   return out
 }
 
-export async function getGA4Data(propertyId) {
+/**
+ * @param {string} propertyId
+ * @param {{ limit?: number }} [options] — default limit 50; use 100 for monthly audit
+ */
+export async function getGA4Data(propertyId, options = {}) {
+  const limit = Number(options.limit) > 0 ? Number(options.limit) : 50
   const client = getGA4Client()
   const { startDate, endDate } = ga4DateRange()
 
@@ -134,7 +186,8 @@ export async function getGA4Data(propertyId) {
       propertyId,
       startDate,
       endDate,
-      fullMetrics
+      fullMetrics,
+      limit
     )
     return mapGa4Rows(response, 2)
   } catch (err1) {
@@ -144,7 +197,8 @@ export async function getGA4Data(propertyId) {
         propertyId,
         startDate,
         endDate,
-        [{ name: 'sessions' }, { name: 'activeUsers' }]
+        [{ name: 'sessions' }, { name: 'activeUsers' }],
+        limit
       )
       return mapGa4Rows(response, -1)
     } catch (err2) {

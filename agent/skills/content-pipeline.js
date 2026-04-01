@@ -232,13 +232,61 @@ export async function runForBrand(brand) {
       `Pulled top ${ga4.length} pages from GA4`
     )
 
+    const plannedRow = await base44.getTopPlannedPost(brand)
+    const plannedId =
+      plannedRow && typeof plannedRow === 'object'
+        ? plannedRow.id ?? plannedRow._id ?? plannedRow.entityId ?? null
+        : null
+
+    let plannedTopic = null
+    if (plannedId != null && plannedRow) {
+      const t = plannedRow.title
+      const k = plannedRow.keyword
+      const p = plannedRow.pillar
+      if (
+        typeof t === 'string' &&
+        t.trim() &&
+        typeof k === 'string' &&
+        k.trim()
+      ) {
+        plannedTopic = {
+          title: t.trim(),
+          keyword: k.trim(),
+          pillar: typeof p === 'string' && p.trim() ? p.trim() : ''
+        }
+      }
+    }
+
+    if (plannedTopic) {
+      const w = await base44.updatePlannedPost(plannedId, { status: 'writing' })
+      if (!w) {
+        await base44.log(
+          agent,
+          brand,
+          'error',
+          'updatePlannedPost(writing) failed; continuing with generation'
+        )
+      }
+    } else {
+      await base44.log(
+        agent,
+        brand,
+        'info',
+        'No planned posts found, falling back to autonomous topic selection'
+      )
+    }
+
     const post = await generateBlogPostJson({
       brand,
       pages,
       keywords: gsc,
-      ga4Pages: ga4
+      ga4Pages: ga4,
+      ...(plannedTopic ? { plannedTopic } : {})
     })
     if (!post) {
+      if (plannedTopic && plannedId != null) {
+        await base44.updatePlannedPost(plannedId, { status: 'planned' })
+      }
       await base44.log(
         agent,
         brand,
@@ -266,8 +314,23 @@ export async function runForBrand(brand) {
       status: 'pending_review'
     })
     if (!created) {
+      if (plannedTopic && plannedId != null) {
+        await base44.updatePlannedPost(plannedId, { status: 'planned' })
+      }
       await base44.log(agent, brand, 'error', 'createBlogPost failed')
       return
+    }
+
+    if (plannedTopic && plannedId != null) {
+      const u = await base44.updatePlannedPost(plannedId, { status: 'written' })
+      if (!u) {
+        await base44.log(
+          agent,
+          brand,
+          'error',
+          'updatePlannedPost(written) failed after BlogPost create'
+        )
+      }
     }
 
     await base44.log(

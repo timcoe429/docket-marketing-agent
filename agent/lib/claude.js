@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 const apiKey = process.env.ANTHROPIC_API_KEY
 const anthropic = apiKey ? new Anthropic({ apiKey }) : null
 
-const BRAND_CONTEXT = {
+export const BRAND_CONTEXT = {
   Docket: {
     brandDescription:
       'Docket is the leading software platform built for dumpster rental, junk hauling, and commercial/residential trash businesses. It handles scheduling, dispatch, driver management, billing, customer communication, and online booking — everything a waste hauling business needs in one platform.',
@@ -19,32 +19,45 @@ const BRAND_CONTEXT = {
 
 /**
  * @param {string} brand
+ * @param {{ title: string, keyword: string, pillar: string } | null | undefined} [plannedTopic]
  * @returns {string | null}
  */
-function buildBlogSystemPrompt(brand) {
+function buildBlogSystemPrompt(brand, plannedTopic) {
   const ctx = BRAND_CONTEXT[brand]
   if (!ctx) return null
 
   const { brandDescription, audience } = ctx
 
+  const topicBlock = plannedTopic
+    ? `TARGET POST (already planned — write exactly this):
+Title: ${plannedTopic.title}
+Target Keyword: ${plannedTopic.keyword}
+Pillar: ${plannedTopic.pillar}
+
+Do not deviate from this topic. Write the best possible post for this exact title and keyword.
+
+Your job is to write a complete, publish-ready blog post for this fixed target keyword. Return the exact target phrase in the JSON "keyword" field (same as Target Keyword above). All placement rules below apply to that keyword.
+`
+    : `Your job is to write a complete, publish-ready blog post targeting a single target keyword. You MUST choose that keyword from the striking_distance_keywords in the user message (prioritize strong opportunities in positions 4–20). Return the exact same phrase in the JSON "keyword" field. All placement rules below apply to that chosen keyword.
+`
+
   return `You are an expert SEO content writer for ${brand}.
 
 ${brandDescription}
 
-Your job is to write a complete, publish-ready blog post targeting a single target keyword. You MUST choose that keyword from the striking_distance_keywords in the user message (prioritize strong opportunities in positions 4–20). Return the exact same phrase in the JSON "keyword" field. All placement rules below apply to that chosen keyword.
-
+${topicBlock}
 The post must be informative, professional, and written for the target audience: ${audience}.
 
 CONTENT REQUIREMENTS:
 - 1,500-2,000 words total
 - Written in a professional, informative tone — helpful and authoritative, not salesy
-- Naturally work your chosen target keyword into the title, first paragraph, at least 2 H2s, and conclusion
-- Include at least 3 internal links to relevant existing pages (use real URLs from the site data provided)
+- Naturally work the target keyword into the title, first paragraph, at least 2 H2s, and conclusion
+- Include up to 3 internal links to relevant existing pages, but only where they naturally fit and genuinely add value for the reader. Never force a link. Only link when the anchor text is descriptive and the destination page is directly relevant to the surrounding content.
 - Every claim should be practical and useful to a business owner in this industry
 
 STRUCTURE REQUIREMENTS — use this exact HTML structure:
 
-1. H1 title (include target keyword)
+1. H1 title (include the target keyword; if a planned title was given, align the H1 with it)
 2. Opening paragraph — 2-3 sentences establishing what the article covers and why it matters
 3. Key Takeaways box — HTML aside element with 4-5 bullet points summarizing the article
 4. 5 body sections each with an H2 heading and 200-300 words of content
@@ -86,7 +99,7 @@ function stripJsonFences(text) {
 }
 
 /**
- * @param {{ brand: string, pages: object[], keywords: object[], ga4Pages: object[] }} ctx
+ * @param {{ brand: string, pages: object[], keywords: object[], ga4Pages: object[], plannedTopic?: { title: string, keyword: string, pillar: string } }} ctx
  * @returns {Promise<{ title: string, keyword: string, meta_title: string, meta_description: string, content: string, faq_schema: string } | null>}
  */
 export async function generateBlogPostJson(ctx) {
@@ -95,7 +108,7 @@ export async function generateBlogPostJson(ctx) {
     return null
   }
 
-  const system = buildBlogSystemPrompt(ctx.brand)
+  const system = buildBlogSystemPrompt(ctx.brand, ctx.plannedTopic)
   if (!system) {
     console.error(
       'claude.generateBlogPostJson: unknown brand (expected Docket or ServiceCore):',
@@ -159,6 +172,166 @@ Respond with a single JSON object only.`
     meta_description: parsed.meta_description,
     content: parsed.content,
     faq_schema: parsed.faq_schema
+  }
+}
+
+function buildSiteAuditSystemPrompt(brand, brandDescription, pillarsJoined) {
+  return `You are an expert SEO strategist analyzing the complete content landscape for ${brand}.
+
+${brandDescription}
+
+Your pillars are: ${pillarsJoined}
+
+You have been given:
+- Complete list of existing pages (URL, title, headings)
+- Full GSC keyword data (keywords, positions, clicks, impressions)
+- GA4 traffic data (pages, sessions, conversions)
+
+Your job is to produce a complete content intelligence report. Return ONLY valid JSON with these exact fields:
+
+{
+  "summary": "2-3 sentence executive summary of the site's current content health and biggest opportunities",
+  
+  "pillar_map": {
+    "Pillar Name": {
+      "description": "what this pillar covers",
+      "existing_posts": ["url1", "url2"],
+      "health": "strong/developing/weak",
+      "gaps": ["topic gap 1", "topic gap 2"]
+    }
+  },
+  
+  "content_gaps": [
+    {
+      "keyword": "target keyword",
+      "monthly_searches": "estimated volume",
+      "pillar": "which pillar this belongs to",
+      "type": "pillar/supporting",
+      "reasoning": "why this gap matters"
+    }
+  ],
+  
+  "action_items": [
+    {
+      "action_type": "prune/combine/update/redirect",
+      "affected_urls": ["url1", "url2"],
+      "recommendation": "specific action to take",
+      "reasoning": "detailed explanation of why",
+      "seo_impact": "high/medium/low",
+      "estimated_benefit": "what improvement to expect"
+    }
+  ],
+  
+  "content_plan": [
+    {
+      "priority": 1,
+      "title": "suggested post title",
+      "keyword": "target keyword",
+      "type": "pillar/supporting",
+      "pillar": "which pillar",
+      "reasoning": "why this should be written now",
+      "estimated_impact": "high/medium/low"
+    }
+  ]
+}
+
+IMPORTANT RULES:
+- content_plan must have exactly 12 items in priority order
+- action_items should be specific and actionable with clear URLs
+- For prune recommendations: explain exactly why (thin content, duplicate, no traffic, cannibalization)
+- For combine recommendations: list all URLs to combine and what the new definitive post should cover
+- For update recommendations: explain what's missing or outdated
+- pillar_map must cover ALL defined pillars even if some have no existing content
+- content_gaps should focus on keywords with real search volume not already covered
+- Do NOT recommend writing posts that already exist on the site`
+}
+
+/**
+ * @param {{
+ *   brand: string,
+ *   brandDescription: string,
+ *   pillarNames: string[],
+ *   pages: object[],
+ *   gscKeywords: object[],
+ *   ga4Pages: object[],
+ *   gscNote?: string,
+ *   ga4Note?: string
+ * }} ctx
+ */
+export async function generateSiteAuditJson(ctx) {
+  if (!anthropic) {
+    console.warn('claude.generateSiteAuditJson: ANTHROPIC_API_KEY not set')
+    return null
+  }
+
+  const pillarsJoined = ctx.pillarNames.join(', ')
+  const system = buildSiteAuditSystemPrompt(
+    ctx.brand,
+    ctx.brandDescription,
+    pillarsJoined
+  )
+
+  const payload = {
+    existing_pages: ctx.pages,
+    gsc_keywords: ctx.gscKeywords,
+    top_ga4_pages: ctx.ga4Pages,
+    data_notes: {
+      gsc: ctx.gscNote ?? null,
+      ga4: ctx.ga4Note ?? null
+    }
+  }
+
+  const user = `Brand: ${ctx.brand}
+
+Use the following data (JSON). If gsc_keywords or top_ga4_pages are empty, or data_notes indicate a source failed, still complete the report and briefly mention limitations in the summary.
+
+${JSON.stringify(payload, null, 2)}
+
+Respond with a single JSON object only.`
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 8192,
+    system,
+    messages: [{ role: 'user', content: user }]
+  })
+
+  const text = message.content[0].type === 'text' ? message.content[0].text : ''
+  let parsed
+  try {
+    parsed = JSON.parse(stripJsonFences(text))
+  } catch {
+    console.error('claude.generateSiteAuditJson: invalid JSON from model')
+    return null
+  }
+
+  if (
+    !parsed ||
+    typeof parsed.summary !== 'string' ||
+    typeof parsed.pillar_map !== 'object' ||
+    parsed.pillar_map === null ||
+    !Array.isArray(parsed.content_gaps) ||
+    !Array.isArray(parsed.action_items) ||
+    !Array.isArray(parsed.content_plan)
+  ) {
+    console.error('claude.generateSiteAuditJson: missing required keys or wrong types')
+    return null
+  }
+
+  if (parsed.content_plan.length !== 12) {
+    console.error(
+      'claude.generateSiteAuditJson: content_plan must have exactly 12 items, got',
+      parsed.content_plan.length
+    )
+    return null
+  }
+
+  return {
+    summary: parsed.summary,
+    pillar_map: parsed.pillar_map,
+    content_gaps: parsed.content_gaps,
+    action_items: parsed.action_items,
+    content_plan: parsed.content_plan
   }
 }
 

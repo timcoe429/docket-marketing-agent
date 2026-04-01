@@ -7,6 +7,7 @@ import {
   publishToWordPress,
   runForBrand
 } from './skills/content-pipeline.js'
+import { runAuditForBrand } from './skills/site-audit.js'
 
 const PORT = Number(process.env.PORT) || 3000
 const BRANDS = Object.keys(BRAND_CONFIG)
@@ -14,6 +15,7 @@ const BRANDS = Object.keys(BRAND_CONFIG)
 let currentStatus = 'idle'
 let lastRun = null
 let pipelineLocked = false
+let auditLocked = false
 
 /** @type {Record<string, string>} */
 const agentIdByBrand = {}
@@ -85,6 +87,21 @@ async function runPipeline() {
   }
 }
 
+async function runAudit() {
+  if (auditLocked) {
+    console.warn('runAudit: already running, skip')
+    return
+  }
+  auditLocked = true
+  try {
+    for (const brand of BRANDS) {
+      await runAuditForBrand(brand)
+    }
+  } finally {
+    auditLocked = false
+  }
+}
+
 const app = express()
 app.use(express.json())
 
@@ -95,6 +112,11 @@ app.get('/health', (_req, res) => {
 app.post('/run', (_req, res) => {
   void runPipeline()
   res.json({ ok: true, message: 'Pipeline started' })
+})
+
+app.post('/run/audit', (_req, res) => {
+  void runAudit()
+  res.json({ ok: true, message: 'Audit started' })
 })
 
 app.post('/run/publish', async (req, res) => {
@@ -136,6 +158,14 @@ cron.schedule(
   '0 8 * * 1',
   () => {
     void runPipeline()
+  },
+  { timezone: 'America/New_York' }
+)
+
+cron.schedule(
+  '0 6 1 * *',
+  () => {
+    void runAudit()
   },
   { timezone: 'America/New_York' }
 )

@@ -15,6 +15,9 @@ Needs persistent polling/cron and SSH access. Vercel serverless does not replace
 ## Base44 is dashboard / control plane for the content agent
 The droplet agent reports status, logs, and blog drafts to **Base44** via REST (`Agent`, `AgentLog`, `BlogPost` entities). **Base44 is the single source of truth** for generated draft content (no Google Sheets/Drive/Docs in this flow). The agent exposes **Express** APIs: `GET /health`, `POST /run` (weekly content pipeline), `POST /run/publish` (body: `{ blogPostId, brand }` — pushes a **WordPress draft** after approval or manual trigger), `GET /status`. The Next.js **dashboard** remains the Supabase-backed UI for jobs and is separate from Base44.
 
+## Base44 BlogPost entity fields (content pipeline)
+The **BlogPost** entity in Base44 must include: **`meta_title`** (text), **`meta_description`** (text), **`faq_schema`** (long text — stores the FAQ JSON-LD `<script type="application/ld+json">…</script>` string). Add or align these in the Base44 app before `createBlogPost` sends them from [`agent/lib/base44.js`](../agent/lib/base44.js); otherwise the API may reject unknown fields.
+
 ## WordPress publish
 Draft posts only (`status: 'draft'` via WP REST). **`POST /run/publish`** loads the `BlogPost` from Base44 and creates the WP draft; Base44 is updated with `wp_draft_url` and workflow status as implemented in the agent.
 

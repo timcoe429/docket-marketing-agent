@@ -101,7 +101,9 @@ export async function createBlogPost({
   brand,
   keyword,
   content,
+  meta_title,
   meta_description,
+  faq_schema,
   google_doc_url,
   status = 'draft'
 }) {
@@ -112,7 +114,9 @@ export async function createBlogPost({
       brand,
       keyword,
       content,
+      meta_title,
       meta_description,
+      faq_schema,
       status
     }
     if (google_doc_url != null) body.google_doc_url = google_doc_url

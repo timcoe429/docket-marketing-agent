@@ -260,7 +260,9 @@ export async function runForBrand(brand) {
       brand,
       keyword: post.keyword,
       content: post.content,
+      meta_title: post.meta_title,
       meta_description: post.meta_description,
+      faq_schema: post.faq_schema,
       status: 'pending_review'
     })
     if (!created) {

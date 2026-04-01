@@ -91,10 +91,15 @@ Return ONLY valid JSON with these exact fields:
 }`
 }
 
+/**
+ * Strip markdown code fences so JSON.parse can run. Handles ```json ... ``` and ``` ... ```
+ * anywhere in the string (first fenced block wins); returns trimmed raw text if no fence.
+ * @param {string} text
+ */
 function stripJsonFences(text) {
-  let t = text.trim()
-  const fence = /^```(?:json)?\s*([\s\S]*?)```$/m.exec(t)
-  if (fence) t = fence[1].trim()
+  const t = text.trim()
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(t)
+  if (fenced) return fenced[1].trim()
   return t
 }
 
@@ -351,19 +356,35 @@ ${JSON.stringify(payload, null, 2)}
 
 Respond with a single JSON object only.`
 
+  const SITE_AUDIT_MAX_TOKENS = 8192
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 8192,
+    max_tokens: SITE_AUDIT_MAX_TOKENS,
     system,
     messages: [{ role: 'user', content: user }]
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text : ''
+  if (message.stop_reason === 'max_tokens') {
+    console.warn(
+      'claude.generateSiteAuditJson: stop_reason=max_tokens — output may be truncated; invalid JSON is likely'
+    )
+  }
+
   let parsed
   try {
-    parsed = JSON.parse(stripJsonFences(text))
-  } catch {
-    console.error('claude.generateSiteAuditJson: invalid JSON from model')
+    const jsonText = stripJsonFences(text)
+    parsed = JSON.parse(jsonText)
+  } catch (err) {
+    const preview = text.slice(0, 500)
+    console.error(
+      'claude.generateSiteAuditJson: invalid JSON from model:',
+      err instanceof Error ? err.message : err
+    )
+    console.error(
+      'claude.generateSiteAuditJson: raw response preview (first 500 chars):',
+      preview
+    )
     return null
   }
 

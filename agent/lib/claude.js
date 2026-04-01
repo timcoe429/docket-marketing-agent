@@ -92,15 +92,12 @@ Return ONLY valid JSON with these exact fields:
 }
 
 /**
- * Strip markdown code fences so JSON.parse can run. Handles ```json ... ``` and ``` ... ```
- * anywhere in the string (first fenced block wins); returns trimmed raw text if no fence.
+ * Strip leading ```json and trailing ``` so JSON.parse can run.
  * @param {string} text
  */
 function stripJsonFences(text) {
-  const t = text.trim()
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(t)
-  if (fenced) return fenced[1].trim()
-  return t
+  const t = String(text).trim()
+  return t.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
 }
 
 /**
@@ -192,7 +189,7 @@ You have been given:
 - Full GSC keyword data (keywords, positions, clicks, impressions)
 - GA4 traffic data (pages, sessions, conversions)
 
-Your job is to produce a complete content intelligence report. Return ONLY valid JSON with these exact fields:
+Your job is to produce a complete content intelligence report. Return ONLY raw JSON with no markdown formatting, no code fences, no backticks. Start your response with { and end with }. Use these exact fields:
 
 {
   "summary": "2-3 sentence executive summary of the site's current content health and biggest opportunities",
@@ -356,7 +353,7 @@ ${JSON.stringify(payload, null, 2)}
 
 Respond with a single JSON object only.`
 
-  const SITE_AUDIT_MAX_TOKENS = 8192
+  const SITE_AUDIT_MAX_TOKENS = 16000
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: SITE_AUDIT_MAX_TOKENS,

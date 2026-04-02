@@ -9,7 +9,7 @@ export const BRANDS = {
   Docket: {
     gscSite: 'https://www.yourdocket.com/',
     ga4PropertyId: '178229582',
-    sitemap: 'https://www.yourdocket.com/sitemap_index.xml',
+    sitemap: 'https://www.yourdocket.com/post-sitemap.xml',
     wpUrl: 'https://www.yourdocket.com',
     wpUser: 'marketing-agent',
     wpPassword: process.env.WP_PASSWORD_DOCKET
@@ -17,14 +17,14 @@ export const BRANDS = {
   ServiceCore: {
     gscSite: 'https://servicecore.com/',
     ga4PropertyId: '321097999',
-    sitemap: 'https://servicecore.com/sitemap_index.xml',
+    sitemap: 'https://servicecore.com/post-sitemap.xml',
     wpUrl: 'https://servicecore.com',
     wpUser: 'marketing-agent',
     wpPassword: process.env.WP_PASSWORD_SERVICECORE
   }
 }
 
-const MAX_PAGES = 200
+const MAX_PAGES = 500
 const HTML_CONCURRENCY = 4
 const HTTP_HEADERS = { 'User-Agent': 'DocketMarketingAgent/1.0' }
 

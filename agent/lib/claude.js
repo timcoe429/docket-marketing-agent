@@ -3,6 +3,15 @@ import Anthropic from '@anthropic-ai/sdk'
 const apiKey = process.env.ANTHROPIC_API_KEY
 const anthropic = apiKey ? new Anthropic({ apiKey }) : null
 
+function systemPromptTodayLine() {
+  const today = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+  return `Today's date is ${today}.`
+}
+
 export const BRAND_CONTEXT = {
   Docket: {
     brandDescription:
@@ -41,7 +50,9 @@ Your job is to write a complete, publish-ready blog post for this fixed target k
     : `Your job is to write a complete, publish-ready blog post targeting a single target keyword. You MUST choose that keyword from the striking_distance_keywords in the user message (prioritize strong opportunities in positions 4–20). Return the exact same phrase in the JSON "keyword" field. All placement rules below apply to that chosen keyword.
 `
 
-  return `You are an expert SEO content writer for ${brand}.
+  return `${systemPromptTodayLine()}
+
+You are an expert SEO content writer for ${brand}.
 
 ${brandDescription}
 
@@ -178,7 +189,9 @@ Respond with a single JSON object only.`
 }
 
 function buildSiteAuditSystemPrompt(brand, brandDescription, pillarsJoined) {
-  return `You are an expert SEO strategist analyzing the complete content landscape for ${brand}.
+  return `${systemPromptTodayLine()}
+
+You are an expert SEO strategist analyzing the complete content landscape for ${brand}.
 
 ${brandDescription}
 

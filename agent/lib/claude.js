@@ -3,6 +3,9 @@ import Anthropic from '@anthropic-ai/sdk'
 const apiKey = process.env.ANTHROPIC_API_KEY
 const anthropic = apiKey ? new Anthropic({ apiKey }) : null
 
+const CLAUDE_JSON_OUTPUT_CRITICAL =
+  'CRITICAL: Return ONLY raw JSON. Do NOT use markdown code fences. Do NOT wrap in ```json or ```. Start your response with { and end with }. Any other format will cause a system failure.'
+
 function systemPromptTodayLine() {
   const today = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
@@ -50,7 +53,9 @@ Your job is to write a complete, publish-ready blog post for this fixed target k
     : `Your job is to write a complete, publish-ready blog post targeting a single target keyword. You MUST choose that keyword from the striking_distance_keywords in the user message (prioritize strong opportunities in positions 4–20). Return the exact same phrase in the JSON "keyword" field. All placement rules below apply to that chosen keyword.
 `
 
-  return `${systemPromptTodayLine()}
+  return `${CLAUDE_JSON_OUTPUT_CRITICAL}
+
+${systemPromptTodayLine()}
 
 You are an expert SEO content writer for ${brand}.
 
@@ -103,12 +108,15 @@ Return ONLY valid JSON with these exact fields:
 }
 
 /**
- * Strip leading ```json and trailing ``` so JSON.parse can run.
+ * Strip markdown code fences so JSON.parse can run (```json, plain ```, trailing fence).
  * @param {string} text
  */
 function stripJsonFences(text) {
-  const t = String(text).trim()
-  return t.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+  return String(text)
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim()
 }
 
 /**
@@ -189,7 +197,9 @@ Respond with a single JSON object only.`
 }
 
 function buildSiteAuditSystemPrompt(brand, brandDescription, pillarsJoined) {
-  return `${systemPromptTodayLine()}
+  return `${CLAUDE_JSON_OUTPUT_CRITICAL}
+
+${systemPromptTodayLine()}
 
 You are an expert SEO strategist analyzing the complete content landscape for ${brand}.
 
@@ -437,7 +447,9 @@ const CRO_KNOWLEDGE_TOOLS = [
 ]
 
 function buildCROKnowledgeSystem() {
-  return `${systemPromptTodayLine()}
+  return `${CLAUDE_JSON_OUTPUT_CRITICAL}
+
+${systemPromptTodayLine()}
 
 You are a CRO (Conversion Rate Optimization) expert specializing in SaaS companies.
 

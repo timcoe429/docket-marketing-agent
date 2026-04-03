@@ -144,6 +144,7 @@ export async function runAuditForBrand(brand) {
 
     await base44.archiveOldAudits(brand)
 
+    // Base44 long-text fields: pillar_map, content_gaps, action_items must be JSON strings
     const auditRow = await base44.createSiteAudit({
       brand,
       audit_date: auditDateIso(),

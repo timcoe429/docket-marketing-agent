@@ -428,6 +428,206 @@ Respond with a single JSON object only.`
   }
 }
 
+const CRO_ANALYSIS_TOOLS = [
+  { type: 'web_search_20250305', name: 'web_search', max_uses: 5 }
+]
+
+const CRO_ANALYSIS_SYSTEM = `You are an expert CRO (Conversion Rate Optimization) specialist analyzing pages for Docket — dumpster rental, junk removal, and commercial/residential waste software.
+
+The only conversion that matters is generate_lead (demo request form submissions).
+
+You have been given:
+- Conversion rate data by device for this page (current 14 days vs previous 14 days)
+- Screenshots of the page on mobile and desktop
+
+Your job is to identify the SINGLE most impactful thing to test on this page. Keep it simple and specific — not a full redesign, just one element.
+
+Return ONLY valid JSON:
+{
+  "page": "/page-path/",
+  "observation": "What you see in the data and/or screenshots that indicates a problem",
+  "hypothesis": "If we change X, conversion rate will improve because Y",
+  "what_to_test": "Specific element and change — e.g. Change CTA button text from 'Schedule a Demo' to 'See Docket in Action'",
+  "device_focus": "mobile/desktop/both",
+  "priority": "high/medium/low",
+  "reasoning": "Why this is the highest priority test right now"
+}`
+
+function extractAssistantTextBlocks(content) {
+  if (!Array.isArray(content)) return ''
+  return content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('\n')
+    .trim()
+}
+
+/**
+ * Per-page CRO recommendation: metrics JSON + optional PNG screenshots, web search enabled.
+ * @param {{
+ *   pagePath: string,
+ *   pageName: string,
+ *   metricsJson: object,
+ *   mobileBase64?: string | null,
+ *   desktopBase64?: string | null
+ * }} args
+ * @returns {Promise<{
+ *   page: string,
+ *   observation: string,
+ *   hypothesis: string,
+ *   what_to_test: string,
+ *   device_focus: string,
+ *   priority: string,
+ *   reasoning: string
+ * } | null>}
+ */
+export async function analyzeCROPageJson({
+  pagePath,
+  pageName,
+  metricsJson,
+  mobileBase64,
+  desktopBase64
+}) {
+  if (!anthropic) {
+    console.warn('claude.analyzeCROPageJson: ANTHROPIC_API_KEY not set')
+    return null
+  }
+
+  let textIntro = `Page: ${pagePath}
+Page name: ${pageName}
+
+Conversion rate data (JSON):
+${JSON.stringify(metricsJson, null, 2)}
+
+`
+  if (!mobileBase64) {
+    textIntro += 'Mobile screenshot: not available (capture failed).\n'
+  } else {
+    textIntro += 'Mobile screenshot: attached as first image.\n'
+  }
+  if (!desktopBase64) {
+    textIntro += 'Desktop screenshot: not available (capture failed).\n'
+  } else {
+    textIntro += 'Desktop screenshot: attached as second image (when mobile is present).\n'
+  }
+  textIntro +=
+    'Use web search if helpful for current CRO best practices. Return ONLY the JSON object specified in the system prompt — no markdown, no code fences.'
+
+  const messages = [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: textIntro },
+        ...(mobileBase64
+          ? [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: 'image/png',
+                  data: mobileBase64
+                }
+              }
+            ]
+          : []),
+        ...(desktopBase64
+          ? [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: 'image/png',
+                  data: desktopBase64
+                }
+              }
+            ]
+          : [])
+      ]
+    }
+  ]
+
+  let lastText = ''
+  const maxTurns = 8
+
+  for (let turn = 0; turn < maxTurns; turn++) {
+    let msg
+    try {
+      msg = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        system: CRO_ANALYSIS_SYSTEM,
+        messages,
+        tools: CRO_ANALYSIS_TOOLS
+      })
+    } catch (err) {
+      console.error(
+        'claude.analyzeCROPageJson: API error:',
+        err instanceof Error ? err.message : err
+      )
+      return null
+    }
+
+    messages.push({ role: 'assistant', content: msg.content })
+    const chunk = extractAssistantTextBlocks(msg.content)
+    if (chunk) lastText = chunk
+
+    if (msg.stop_reason === 'end_turn' || msg.stop_reason === 'max_tokens') {
+      break
+    }
+    if (msg.stop_reason === 'pause_turn') {
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Continue and finish with the single JSON object only.'
+          }
+        ]
+      })
+      continue
+    }
+    break
+  }
+
+  if (!lastText) {
+    console.error('claude.analyzeCROPageJson: empty model text')
+    return null
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(stripJsonFences(lastText))
+  } catch {
+    console.error('claude.analyzeCROPageJson: invalid JSON from model')
+    return null
+  }
+
+  const ok =
+    parsed &&
+    typeof parsed.page === 'string' &&
+    typeof parsed.observation === 'string' &&
+    typeof parsed.hypothesis === 'string' &&
+    typeof parsed.what_to_test === 'string' &&
+    typeof parsed.device_focus === 'string' &&
+    typeof parsed.priority === 'string' &&
+    typeof parsed.reasoning === 'string'
+
+  if (!ok) {
+    console.error('claude.analyzeCROPageJson: missing required keys')
+    return null
+  }
+
+  return {
+    page: parsed.page,
+    observation: parsed.observation,
+    hypothesis: parsed.hypothesis,
+    what_to_test: parsed.what_to_test,
+    device_focus: parsed.device_focus,
+    priority: parsed.priority,
+    reasoning: parsed.reasoning
+  }
+}
+
 export async function ask(prompt, system = 'You are a marketing operations agent.') {
   if (!anthropic) {
     console.warn('claude.ask: ANTHROPIC_API_KEY not set')

@@ -306,6 +306,34 @@ export async function updatePlannedPost(id, fields) {
   }
 }
 
+export async function createCROSnapshot(fields) {
+  try {
+    const path = entityPath('CROSnapshot')
+    const { data } = await client.post(path, fields)
+    return data ?? fields
+  } catch (err) {
+    console.error(
+      '[base44] createCROSnapshot failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function createCRORecommendation(fields) {
+  try {
+    const path = entityPath('CRORecommendation')
+    const { data } = await client.post(path, fields)
+    return data ?? fields
+  } catch (err) {
+    console.error(
+      '[base44] createCRORecommendation failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
 export async function archiveOldAudits(brand) {
   try {
     const path = entityPath('SiteAudit')

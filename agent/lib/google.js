@@ -206,3 +206,207 @@ export async function getGA4Data(propertyId, options = {}) {
     }
   }
 }
+
+const CRO_TZ = 'America/New_York'
+const GA4_LEAD_EVENT = 'generate_lead'
+
+/**
+ * Normalize GA4 / config paths for matching (lowercase, leading slash, no trailing slash except root).
+ * @param {string} path
+ */
+export function normalizeGa4PagePath(path) {
+  let p = String(path || '').trim().toLowerCase()
+  if (!p.startsWith('/')) p = `/${p}`
+  p = p.replace(/\/+$/, '')
+  return p || '/'
+}
+
+function addDaysYmd(ymd, deltaDays) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + deltaDays)
+  const yy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+/**
+ * Calendar yesterday in America/New_York (YYYY-MM-DD). CRO reports use this as the end date
+ * for the "current" 14-day window (unlike ga4DateRange() which uses a T-3 lag for long pulls).
+ */
+export function getCROReportEndDateEt() {
+  const todayEt = new Date().toLocaleDateString('en-CA', {
+    timeZone: CRO_TZ
+  })
+  return addDaysYmd(todayEt, -1)
+}
+
+/**
+ * Inclusive 14-day current window ending at `endYmd`, and the prior 14-day window.
+ * @param {string} endYmd
+ * @returns {{ currentStart: string, currentEnd: string, previousStart: string, previousEnd: string }}
+ */
+export function getCROFourteenDayRanges(endYmd) {
+  const currentEnd = endYmd
+  const currentStart = addDaysYmd(currentEnd, -13)
+  const previousEnd = addDaysYmd(currentStart, -1)
+  const previousStart = addDaysYmd(previousEnd, -13)
+  return { currentStart, currentEnd, previousStart, previousEnd }
+}
+
+function expandPathVariantsForFilter(paths) {
+  const set = new Set()
+  for (const p of paths) {
+    const n = normalizeGa4PagePath(p)
+    set.add(n)
+    set.add(`${n}/`)
+  }
+  return [...set]
+}
+
+function pagePathDimensionFilter(paths) {
+  const values = expandPathVariantsForFilter(paths)
+  return {
+    filter: {
+      fieldName: 'pagePath',
+      inListFilter: {
+        caseSensitive: false,
+        values
+      }
+    }
+  }
+}
+
+const generateLeadEventFilter = {
+  filter: {
+    fieldName: 'eventName',
+    stringFilter: {
+      matchType: 'EXACT',
+      value: GA4_LEAD_EVENT
+    }
+  }
+}
+
+/** @returns {Map<string, number>} key `${normalizePath}|${device}` -> sessions */
+function mapPathDeviceMetrics(response) {
+  const m = new Map()
+  for (const row of response.rows ?? []) {
+    const page = row.dimensionValues?.[0]?.value ?? ''
+    const device = String(row.dimensionValues?.[1]?.value ?? '').toLowerCase()
+    const val = Number(row.metricValues?.[0]?.value ?? 0)
+    const key = `${normalizeGa4PagePath(page)}|${device}`
+    m.set(key, (m.get(key) ?? 0) + val)
+  }
+  return m
+}
+
+/** @returns {Map<string, number>} */
+function mapPathDeviceLeads(response) {
+  const m = new Map()
+  for (const row of response.rows ?? []) {
+    const page = row.dimensionValues?.[0]?.value ?? ''
+    const device = String(row.dimensionValues?.[1]?.value ?? '').toLowerCase()
+    const eventName = String(row.dimensionValues?.[2]?.value ?? '').toLowerCase()
+    if (eventName && eventName !== GA4_LEAD_EVENT) continue
+    const val = Number(row.metricValues?.[0]?.value ?? 0)
+    const key = `${normalizeGa4PagePath(page)}|${device}`
+    m.set(key, (m.get(key) ?? 0) + val)
+  }
+  return m
+}
+
+async function runCroSessionsWindow(client, propertyId, startDate, endDate, pathFilter) {
+  const [response] = await client.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: 'pagePath' }, { name: 'deviceCategory' }],
+    metrics: [{ name: 'sessions' }],
+    dimensionFilter: pathFilter,
+    limit: 10000
+  })
+  return mapPathDeviceMetrics(response)
+}
+
+async function runCroLeadsWindow(client, propertyId, startDate, endDate, pathFilter) {
+  const [response] = await client.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [
+      { name: 'pagePath' },
+      { name: 'deviceCategory' },
+      { name: 'eventName' }
+    ],
+    metrics: [{ name: 'eventCount' }],
+    dimensionFilter: {
+      andGroup: {
+        expressions: [pathFilter, generateLeadEventFilter]
+      }
+    },
+    limit: 10000
+  })
+  return mapPathDeviceLeads(response)
+}
+
+/**
+ * Sessions and generate_lead event counts per pagePath + device for two 14-day windows.
+ * @param {string} propertyId
+ * @param {string[]} pagePaths — money page paths from config
+ * @returns {Promise<{
+ *   ranges: { currentStart: string, currentEnd: string, previousStart: string, previousEnd: string },
+ *   sessionsCurrent: Map<string, number>,
+ *   sessionsPrevious: Map<string, number>,
+ *   leadsCurrent: Map<string, number>,
+ *   leadsPrevious: Map<string, number>
+ * }>}
+ */
+export async function getCROMoneyPageMetrics(propertyId, pagePaths) {
+  const client = getGA4Client()
+  const endYmd = getCROReportEndDateEt()
+  const ranges = getCROFourteenDayRanges(endYmd)
+  const pathFilter = pagePathDimensionFilter(pagePaths)
+
+  const [
+    sessionsCurrent,
+    sessionsPrevious,
+    leadsCurrent,
+    leadsPrevious
+  ] = await Promise.all([
+    runCroSessionsWindow(
+      client,
+      propertyId,
+      ranges.currentStart,
+      ranges.currentEnd,
+      pathFilter
+    ),
+    runCroSessionsWindow(
+      client,
+      propertyId,
+      ranges.previousStart,
+      ranges.previousEnd,
+      pathFilter
+    ),
+    runCroLeadsWindow(
+      client,
+      propertyId,
+      ranges.currentStart,
+      ranges.currentEnd,
+      pathFilter
+    ),
+    runCroLeadsWindow(
+      client,
+      propertyId,
+      ranges.previousStart,
+      ranges.previousEnd,
+      pathFilter
+    )
+  ])
+
+  return {
+    ranges,
+    sessionsCurrent,
+    sessionsPrevious,
+    leadsCurrent,
+    leadsPrevious
+  }
+}

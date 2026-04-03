@@ -294,6 +294,24 @@ export async function runCROAgent() {
       `Screenshots captured for ${capturedPages} pages`
     )
 
+    let knowledgeBaseContext = 'No knowledge base on file.'
+    try {
+      const kb = await base44.getCROKnowledgeBase(BRAND)
+      if (kb?.content) knowledgeBaseContext = String(kb.content)
+    } catch {
+      /* keep default */
+    }
+
+    let activeTestsContext = 'No active tests.'
+    try {
+      const tests = (await base44.getTestingRecommendations(BRAND)) ?? []
+      activeTestsContext = tests.length
+        ? JSON.stringify(tests, null, 2)
+        : 'No active tests.'
+    } catch {
+      /* keep default */
+    }
+
     const recommendations = []
     const dateStr = todayEtYmd()
 
@@ -329,7 +347,9 @@ export async function runCROAgent() {
         pageName,
         metricsJson: claudeRows,
         mobileBase64,
-        desktopBase64
+        desktopBase64,
+        knowledgeBaseContext,
+        activeTestsContext
       })
 
       if (claudeResult) {
@@ -388,6 +408,8 @@ export async function runCROAgent() {
         page_path: top.page_path,
         page_name: top.page_name,
         observation: top.observation,
+        benchmark_comparison: top.benchmark_comparison,
+        benchmark_gap: top.benchmark_gap,
         hypothesis: top.hypothesis,
         what_to_test: top.what_to_test,
         device_focus: top.device_focus,

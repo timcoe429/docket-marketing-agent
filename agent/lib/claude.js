@@ -432,26 +432,118 @@ const CRO_ANALYSIS_TOOLS = [
   { type: 'web_search_20250305', name: 'web_search', max_uses: 5 }
 ]
 
-const CRO_ANALYSIS_SYSTEM = `You are an expert CRO (Conversion Rate Optimization) specialist analyzing pages for Docket — dumpster rental, junk removal, and commercial/residential waste software.
+const CRO_KNOWLEDGE_TOOLS = [
+  { type: 'web_search_20250305', name: 'web_search', max_uses: 10 }
+]
+
+function buildCROKnowledgeSystem() {
+  return `${systemPromptTodayLine()}
+
+You are a CRO (Conversion Rate Optimization) expert specializing in SaaS companies.
+
+Research and compile the most current and effective CRO knowledge for SaaS websites. Focus on:
+
+1. CONVERSION RATE BENCHMARKS — Research current industry benchmarks for:
+   - SaaS homepage conversion rates
+   - Demo request / schedule a demo page conversion rates
+   - PPC landing page conversion rates
+   - Feature/product page conversion rates
+   - Mobile vs desktop conversion rate gaps typical in SaaS
+
+2. HIGH-IMPACT CRO PATTERNS — What's working right now for SaaS:
+   - Above the fold: trust signals, social proof, testimonials
+   - Form optimization: field count, progressive disclosure, multi-step
+   - CTA optimization: text, color, placement, size
+   - Modal vs dedicated landing page patterns
+   - Mobile-specific optimizations
+   - Video vs static hero sections
+   - Pricing page patterns
+   - Navigation: header presence vs headerless on landers
+
+3. OUTSIDE THE BOX tactics gaining traction in SaaS CRO:
+   - Unconventional approaches that are showing results
+   - Emerging patterns from top-converting SaaS companies
+
+4. WHAT DOES NOT WORK anymore — common mistakes SaaS companies still make
+
+Return ONLY valid JSON:
+{
+  "benchmarks": {
+    "homepage": { "low": 0, "average": 0, "good": 0, "unit": "%" },
+    "demo_page": { "low": 0, "average": 0, "good": 0, "unit": "%" },
+    "ppc_lander": { "low": 0, "average": 0, "good": 0, "unit": "%" },
+    "feature_page": { "low": 0, "average": 0, "good": 0, "unit": "%" },
+    "mobile_desktop_gap": "typical gap description"
+  },
+  "high_impact_patterns": [
+    { "pattern": "...", "impact": "high/medium", "description": "..." }
+  ],
+  "outside_the_box": [
+    { "tactic": "...", "description": "...", "when_to_use": "..." }
+  ],
+  "what_not_to_do": [
+    { "mistake": "...", "why": "..." }
+  ],
+  "last_researched": "today's date",
+  "sources_searched": ["list of topics/sources searched"]
+}
+
+Use numeric values for low/average/good where you have evidence; if uncertain, use your best evidence-based estimates and keep unit "%". No markdown, no code fences.`
+}
+
+const CRO_ANALYSIS_SYSTEM_TEMPLATE = `You are an expert CRO (Conversion Rate Optimization) specialist analyzing pages for Docket — dumpster rental, junk removal, and commercial/residential waste software.
 
 The only conversion that matters is generate_lead (demo request form submissions).
+
+You have access to a CRO knowledge base with current SaaS benchmarks and best practices:
+__KNOWLEDGE_BASE__
+
+CURRENTLY ACTIVE TESTS:
+__ACTIVE_TESTS__
 
 You have been given:
 - Conversion rate data by device for this page (current 14 days vs previous 14 days)
 - Screenshots of the page on mobile and desktop
+
+When analyzing each page:
+1. Compare the page's conversion rate against the relevant benchmark from the knowledge base (infer page type from path and page name, e.g. schedule-a-demo vs PPC lander vs software product page).
+2. State clearly in benchmark_comparison: this page is converting at X% vs industry benchmark of Y–Z% for this page type.
+3. If there is an active test running on this page, analyze whether the conversion rate has changed and note the trend in active_test_update; otherwise use null.
+4. Use the high_impact_patterns and outside_the_box tactics from the knowledge base to inform your recommendation.
+5. Consider unconventional approaches — don't just recommend the obvious.
 
 Your job is to identify the SINGLE most impactful thing to test on this page. Keep it simple and specific — not a full redesign, just one element.
 
 Return ONLY valid JSON:
 {
   "page": "/page-path/",
-  "observation": "What you see in the data and/or screenshots that indicates a problem",
-  "hypothesis": "If we change X, conversion rate will improve because Y",
+  "observation": "...",
+  "benchmark_comparison": "This page converts at X% vs SaaS benchmark of Y-Z% for [page type]",
+  "benchmark_gap": "+X% above / -X% below benchmark",
+  "hypothesis": "...",
   "what_to_test": "Specific element and change — e.g. Change CTA button text from 'Schedule a Demo' to 'See Docket in Action'",
   "device_focus": "mobile/desktop/both",
   "priority": "high/medium/low",
-  "reasoning": "Why this is the highest priority test right now"
-}`
+  "reasoning": "...",
+  "active_test_update": null
+}
+
+For active_test_update: use a string with your assessment when an active test applies to this page, or JSON null if none.`
+
+function buildCROAnalysisSystem(knowledgeBaseContext, activeTestsContext) {
+  const kb =
+    knowledgeBaseContext && String(knowledgeBaseContext).trim()
+      ? String(knowledgeBaseContext)
+      : 'No knowledge base on file.'
+  const tests =
+    activeTestsContext && String(activeTestsContext).trim()
+      ? String(activeTestsContext)
+      : 'No active tests.'
+  return CRO_ANALYSIS_SYSTEM_TEMPLATE.replace('__KNOWLEDGE_BASE__', kb).replace(
+    '__ACTIVE_TESTS__',
+    tests
+  )
+}
 
 function extractAssistantTextBlocks(content) {
   if (!Array.isArray(content)) return ''
@@ -463,22 +555,114 @@ function extractAssistantTextBlocks(content) {
 }
 
 /**
+ * Monthly CRO knowledge base: web search + structured SaaS benchmarks/patterns JSON.
+ * @returns {Promise<object | null>}
+ */
+export async function generateCROKnowledgeBaseJson() {
+  if (!anthropic) {
+    console.warn('claude.generateCROKnowledgeBaseJson: ANTHROPIC_API_KEY not set')
+    return null
+  }
+
+  const user =
+    'Execute the research and respond with ONLY the JSON object described in your instructions. No markdown, no code fences.'
+
+  const messages = [{ role: 'user', content: user }]
+  let lastText = ''
+  const maxTurns = 8
+
+  for (let turn = 0; turn < maxTurns; turn++) {
+    let msg
+    try {
+      msg = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        system: buildCROKnowledgeSystem(),
+        messages,
+        tools: CRO_KNOWLEDGE_TOOLS
+      })
+    } catch (err) {
+      console.error(
+        'claude.generateCROKnowledgeBaseJson: API error:',
+        err instanceof Error ? err.message : err
+      )
+      return null
+    }
+
+    messages.push({ role: 'assistant', content: msg.content })
+    const chunk = extractAssistantTextBlocks(msg.content)
+    if (chunk) lastText = chunk
+
+    if (msg.stop_reason === 'end_turn' || msg.stop_reason === 'max_tokens') {
+      break
+    }
+    if (msg.stop_reason === 'pause_turn') {
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Continue and finish with the single JSON object only.'
+          }
+        ]
+      })
+      continue
+    }
+    break
+  }
+
+  if (!lastText) {
+    console.error('claude.generateCROKnowledgeBaseJson: empty model text')
+    return null
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(stripJsonFences(lastText))
+  } catch {
+    console.error('claude.generateCROKnowledgeBaseJson: invalid JSON from model')
+    return null
+  }
+
+  const b = parsed?.benchmarks
+  const ok =
+    parsed &&
+    b &&
+    typeof b === 'object' &&
+    Array.isArray(parsed.high_impact_patterns) &&
+    Array.isArray(parsed.outside_the_box) &&
+    Array.isArray(parsed.what_not_to_do)
+
+  if (!ok) {
+    console.error('claude.generateCROKnowledgeBaseJson: missing required keys')
+    return null
+  }
+
+  return parsed
+}
+
+/**
  * Per-page CRO recommendation: metrics JSON + optional PNG screenshots, web search enabled.
  * @param {{
  *   pagePath: string,
  *   pageName: string,
  *   metricsJson: object,
  *   mobileBase64?: string | null,
- *   desktopBase64?: string | null
+ *   desktopBase64?: string | null,
+ *   knowledgeBaseContext?: string | null,
+ *   activeTestsContext?: string | null
  * }} args
  * @returns {Promise<{
  *   page: string,
  *   observation: string,
+ *   benchmark_comparison: string,
+ *   benchmark_gap: string,
  *   hypothesis: string,
  *   what_to_test: string,
  *   device_focus: string,
  *   priority: string,
- *   reasoning: string
+ *   reasoning: string,
+ *   active_test_update: string | null
  * } | null>}
  */
 export async function analyzeCROPageJson({
@@ -486,12 +670,19 @@ export async function analyzeCROPageJson({
   pageName,
   metricsJson,
   mobileBase64,
-  desktopBase64
+  desktopBase64,
+  knowledgeBaseContext,
+  activeTestsContext
 }) {
   if (!anthropic) {
     console.warn('claude.analyzeCROPageJson: ANTHROPIC_API_KEY not set')
     return null
   }
+
+  const system = buildCROAnalysisSystem(
+    knowledgeBaseContext,
+    activeTestsContext
+  )
 
   let textIntro = `Page: ${pagePath}
 Page name: ${pageName}
@@ -554,8 +745,8 @@ ${JSON.stringify(metricsJson, null, 2)}
     try {
       msg = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2048,
-        system: CRO_ANALYSIS_SYSTEM,
+        max_tokens: 3072,
+        system,
         messages,
         tools: CRO_ANALYSIS_TOOLS
       })
@@ -602,15 +793,21 @@ ${JSON.stringify(metricsJson, null, 2)}
     return null
   }
 
+  const atu = parsed?.active_test_update
+  const atuOk = atu === null || typeof atu === 'string'
+
   const ok =
     parsed &&
     typeof parsed.page === 'string' &&
     typeof parsed.observation === 'string' &&
+    typeof parsed.benchmark_comparison === 'string' &&
+    typeof parsed.benchmark_gap === 'string' &&
     typeof parsed.hypothesis === 'string' &&
     typeof parsed.what_to_test === 'string' &&
     typeof parsed.device_focus === 'string' &&
     typeof parsed.priority === 'string' &&
-    typeof parsed.reasoning === 'string'
+    typeof parsed.reasoning === 'string' &&
+    atuOk
 
   if (!ok) {
     console.error('claude.analyzeCROPageJson: missing required keys')
@@ -620,11 +817,14 @@ ${JSON.stringify(metricsJson, null, 2)}
   return {
     page: parsed.page,
     observation: parsed.observation,
+    benchmark_comparison: parsed.benchmark_comparison,
+    benchmark_gap: parsed.benchmark_gap,
     hypothesis: parsed.hypothesis,
     what_to_test: parsed.what_to_test,
     device_focus: parsed.device_focus,
     priority: parsed.priority,
-    reasoning: parsed.reasoning
+    reasoning: parsed.reasoning,
+    active_test_update: atu === null ? null : String(atu)
   }
 }
 

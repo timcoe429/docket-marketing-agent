@@ -11,7 +11,7 @@
 - [x] **Agent (historical)** — polling `jobs` in Supabase; replaced by Express agent below
 
 ## Phase 2 — Agent: Express + Base44 + content pipeline
-- [x] **Agent** — Express: `GET /health`, `POST /run`, `POST /run/audit`, `POST /run/cro`, `POST /run/publish`, `GET /status`; `node-cron` Monday 8:00 AM `America/New_York` → content pipeline for Docket then ServiceCore; startup `registerAgent` for both brands; `lib/base44.js`; `lib/google.js` (GSC OAuth2 + GA4 service account); `lib/claude.js`; `skills/content-pipeline.js` (sitemap crawl, GSC/GA4, Claude → Base44 `BlogPost` `pending_review`, WordPress draft via `/run/publish`); `.env.example`; no Supabase in agent process (dashboard still uses Supabase)
+- [x] **Agent** — Express: `GET /health`, `POST /run`, `POST /run/audit`, `POST /run/cro`, `POST /run/cro-knowledge`, `POST /run/publish`, `GET /status`; `node-cron` Monday 8:00 AM `America/New_York` → content pipeline for Docket then ServiceCore; startup `registerAgent` for both brands; `lib/base44.js`; `lib/google.js` (GSC OAuth2 + GA4 service account); `lib/claude.js`; `skills/content-pipeline.js` (sitemap crawl, GSC/GA4, Claude → Base44 `BlogPost` `pending_review`, WordPress draft via `/run/publish`); `.env.example`; no Supabase in agent process (dashboard still uses Supabase)
 - [ ] **Verify:** droplet or local — `npm start`, `/health`, `/status`, `POST /run` produces a `BlogPost` in Base44 and AgentLog steps; optional: `POST /run/publish` with `{ blogPostId, brand }` creates a **WordPress draft** and updates Base44 (`wp_draft_url`, status)
 
 ## Phase 2 — Content Intelligence
@@ -21,6 +21,7 @@
 
 ## CRO agent (Docket)
 - [x] **CRO agent** — `skills/cro-agent.js`: bi-weekly Mondays 9:00 AM ET when day-of-month is 1–7 or 15–21 (`node-cron`) and `POST /run/cro`. Pulls GA4 **`generate_lead`** event counts (via `eventCount` + `eventName` filter) and **sessions** per money page and device (mobile/desktop/tablet) for the last 14 days vs the prior 14 days (anchor: yesterday ET). **Puppeteer-core** screenshots (mobile 390×844, desktop 1440×900) to `/tmp/cro-screenshots/`, then **Claude** (`claude-sonnet-4-6`, web search tool) with metrics + images → one test idea per page. Saves **`CROSnapshot`** per page and **one** **`CRORecommendation`** (highest priority) to Base44; AgentLog milestones; failures do not crash the Express process; temp screenshots always cleaned up.
+- [x] **CRO knowledge base** — `skills/cro-knowledge-base.js`: monthly 1st at 7:00 AM ET (`node-cron`) and `POST /run/cro-knowledge`. **Claude** with web search (`max_uses: 10`) researches current SaaS CRO benchmarks and patterns; result stored in Base44 **`CROKnowledgeBase`** (full JSON in `content`, benchmarks duplicate in `benchmarks`). Before each CRO analysis run, `cro-agent` loads that knowledge base plus any **`CRORecommendation`** rows with `status=testing` and passes them into Claude (if the knowledge base is missing, analysis continues with empty context).
 
 ## In Progress / Up Next
 1. **Deploy dashboard** to Vercel (env: `NEXT_PUBLIC_SUPABASE_*`)

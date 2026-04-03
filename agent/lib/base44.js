@@ -334,6 +334,94 @@ export async function createCRORecommendation(fields) {
   }
 }
 
+export async function getCROKnowledgeBase(brand) {
+  try {
+    const path = entityPath('CROKnowledgeBase')
+    const { data: raw } = await client.get(path)
+    const list = normalizeList(raw)
+    const row = list.find((r) => r && r.brand === brand)
+    return row ?? null
+  } catch (err) {
+    console.error(
+      '[base44] getCROKnowledgeBase failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function upsertCROKnowledgeBase({
+  brand,
+  content,
+  benchmarks,
+  last_updated,
+  summary
+}) {
+  try {
+    const path = entityPath('CROKnowledgeBase')
+    const { data: raw } = await client.get(path)
+    const list = normalizeList(raw)
+    const existing = list.find((r) => r && r.brand === brand)
+    const body = { brand, content, benchmarks, last_updated, summary }
+
+    if (existing) {
+      const id = recordId(existing)
+      if (!id) {
+        console.error(
+          '[base44] upsertCROKnowledgeBase: existing row has no id',
+          existing
+        )
+        return null
+      }
+      const { data } = await client.put(`${path}/${id}`, body)
+      return data ?? { ...existing, ...body, id }
+    }
+
+    const { data } = await client.post(path, body)
+    return data ?? body
+  } catch (err) {
+    console.error(
+      '[base44] upsertCROKnowledgeBase failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function updateCRORecommendation(id, fields) {
+  try {
+    const path = `${entityPath('CRORecommendation')}/${id}`
+    const { data } = await client.put(path, fields)
+    return data ?? { id, ...fields }
+  } catch (err) {
+    console.error(
+      '[base44] updateCRORecommendation failed:',
+      err.response?.data ?? err.message
+    )
+    return null
+  }
+}
+
+export async function getTestingRecommendations(brand) {
+  try {
+    const path = entityPath('CRORecommendation')
+    const { data: raw } = await client.get(path)
+    const list = normalizeList(raw)
+    return list.filter(
+      (row) =>
+        row &&
+        row.brand === brand &&
+        String(row.status || '').toLowerCase() === 'testing'
+    )
+  } catch (err) {
+    console.error(
+      '[base44] getTestingRecommendations failed:',
+      err.response?.data ?? err.message
+    )
+    return []
+  }
+}
+
 export async function archiveOldAudits(brand) {
   try {
     const path = entityPath('SiteAudit')

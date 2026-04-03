@@ -9,6 +9,7 @@ import {
 } from './skills/content-pipeline.js'
 import { runAuditForBrand } from './skills/site-audit.js'
 import { runCROAgent } from './skills/cro-agent.js'
+import { updateCROKnowledgeBase } from './skills/cro-knowledge-base.js'
 
 const PORT = Number(process.env.PORT) || 3000
 const BRANDS = Object.keys(BRAND_CONFIG)
@@ -18,6 +19,7 @@ let lastRun = null
 let pipelineLocked = false
 let auditLocked = false
 let croLocked = false
+let croKbLocked = false
 
 /** @type {Record<string, string>} */
 const agentIdByBrand = {}
@@ -117,6 +119,19 @@ async function runCRO() {
   }
 }
 
+async function runCROKnowledge() {
+  if (croKbLocked) {
+    console.warn('runCROKnowledge: already running, skip')
+    return
+  }
+  croKbLocked = true
+  try {
+    await updateCROKnowledgeBase('Docket')
+  } finally {
+    croKbLocked = false
+  }
+}
+
 const app = express()
 app.use(express.json())
 
@@ -137,6 +152,11 @@ app.post('/run/audit', (_req, res) => {
 app.post('/run/cro', (_req, res) => {
   void runCRO()
   res.json({ ok: true, message: 'CRO agent started' })
+})
+
+app.post('/run/cro-knowledge', (_req, res) => {
+  void runCROKnowledge()
+  res.json({ ok: true, message: 'CRO knowledge base update started' })
 })
 
 app.post('/run/publish', async (req, res) => {
@@ -194,6 +214,14 @@ cron.schedule(
   '0 9 1-7,15-21 * 1',
   () => {
     void runCRO()
+  },
+  { timezone: 'America/New_York' }
+)
+
+cron.schedule(
+  '0 7 1 * *',
+  () => {
+    void runCROKnowledge()
   },
   { timezone: 'America/New_York' }
 )

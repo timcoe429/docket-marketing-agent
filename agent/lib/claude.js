@@ -632,6 +632,10 @@ export async function generateCROKnowledgeBaseJson() {
   try {
     parsed = JSON.parse(stripJsonFences(lastText))
   } catch {
+    console.error(
+      'claude.generateCROKnowledgeBaseJson: raw response preview:',
+      lastText.slice(0, 500)
+    )
     console.error('claude.generateCROKnowledgeBaseJson: invalid JSON from model')
     return null
   }

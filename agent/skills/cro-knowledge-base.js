@@ -6,7 +6,11 @@ import { generateCROKnowledgeBaseJson } from '../lib/claude.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const CRO_KNOWLEDGE_DIR = join(__dirname, '..', 'data')
-const CRO_KNOWLEDGE_FILE = join(CRO_KNOWLEDGE_DIR, 'cro-knowledge-base.json')
+
+const KNOWLEDGE_FILE_BY_BRAND = {
+  Docket: join(CRO_KNOWLEDGE_DIR, 'cro-knowledge-base-docket.json'),
+  ServiceCore: join(CRO_KNOWLEDGE_DIR, 'cro-knowledge-base-servicecore.json')
+}
 
 const AGENT_NAME = 'cro-knowledge-base'
 
@@ -23,6 +27,17 @@ function todayEtYmd() {
  */
 export async function updateCROKnowledgeBase(brand) {
   try {
+    const outFile = KNOWLEDGE_FILE_BY_BRAND[brand]
+    if (!outFile) {
+      await base44.log(
+        AGENT_NAME,
+        brand,
+        'error',
+        `Unknown brand for CRO knowledge file: ${brand}`
+      )
+      return
+    }
+
     await base44.log(
       AGENT_NAME,
       brand,
@@ -42,7 +57,7 @@ export async function updateCROKnowledgeBase(brand) {
     }
 
     fs.mkdirSync(CRO_KNOWLEDGE_DIR, { recursive: true })
-    fs.writeFileSync(CRO_KNOWLEDGE_FILE, JSON.stringify(parsed, null, 2), 'utf8')
+    fs.writeFileSync(outFile, JSON.stringify(parsed, null, 2), 'utf8')
 
     const last_updated = todayEtYmd()
     const nSources = Array.isArray(parsed.sources_searched)

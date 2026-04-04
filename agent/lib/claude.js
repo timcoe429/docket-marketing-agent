@@ -508,7 +508,14 @@ Return ONLY valid JSON:
 Use numeric values for low/average/good where you have evidence; if uncertain, use your best evidence-based estimates and keep unit "%". No markdown, no code fences.`
 }
 
-const CRO_ANALYSIS_SYSTEM_TEMPLATE = `You are an expert CRO (Conversion Rate Optimization) specialist analyzing pages for Docket — dumpster rental, junk removal, and commercial/residential waste software.
+const CRO_ANALYSIS_BRAND_LINE = {
+  Docket:
+    'Docket — dumpster rental, junk removal, and commercial/residential waste software.',
+  ServiceCore:
+    'ServiceCore. ServiceCore is software for portable toilet, septic, and grease trap businesses.'
+}
+
+const CRO_ANALYSIS_SYSTEM_TEMPLATE = `You are an expert CRO (Conversion Rate Optimization) specialist analyzing pages for __BRAND_LINE__
 
 The only conversion that matters is generate_lead (demo request form submissions).
 
@@ -547,7 +554,13 @@ Return ONLY valid JSON:
 
 For active_test_update: use a string with your assessment when an active test applies to this page, or JSON null if none.`
 
-function buildCROAnalysisSystem(knowledgeBaseContext, activeTestsContext) {
+function buildCROAnalysisSystem(
+  knowledgeBaseContext,
+  activeTestsContext,
+  brand = 'Docket'
+) {
+  const brandLine =
+    CRO_ANALYSIS_BRAND_LINE[brand] ?? CRO_ANALYSIS_BRAND_LINE.Docket
   const kb =
     knowledgeBaseContext && String(knowledgeBaseContext).trim()
       ? String(knowledgeBaseContext)
@@ -556,10 +569,9 @@ function buildCROAnalysisSystem(knowledgeBaseContext, activeTestsContext) {
     activeTestsContext && String(activeTestsContext).trim()
       ? String(activeTestsContext)
       : 'No active tests.'
-  return CRO_ANALYSIS_SYSTEM_TEMPLATE.replace('__KNOWLEDGE_BASE__', kb).replace(
-    '__ACTIVE_TESTS__',
-    tests
-  )
+  return CRO_ANALYSIS_SYSTEM_TEMPLATE.replace('__BRAND_LINE__', brandLine)
+    .replace('__KNOWLEDGE_BASE__', kb)
+    .replace('__ACTIVE_TESTS__', tests)
 }
 
 function extractAssistantTextBlocks(content) {
@@ -677,7 +689,8 @@ export async function generateCROKnowledgeBaseJson() {
  *   mobileBase64?: string | null,
  *   desktopBase64?: string | null,
  *   knowledgeBaseContext?: string | null,
- *   activeTestsContext?: string | null
+ *   activeTestsContext?: string | null,
+ *   brand?: string
  * }} args
  * @returns {Promise<{
  *   page: string,
@@ -699,7 +712,8 @@ export async function analyzeCROPageJson({
   mobileBase64,
   desktopBase64,
   knowledgeBaseContext,
-  activeTestsContext
+  activeTestsContext,
+  brand = 'Docket'
 }) {
   if (!anthropic) {
     console.warn('claude.analyzeCROPageJson: ANTHROPIC_API_KEY not set')
@@ -708,7 +722,8 @@ export async function analyzeCROPageJson({
 
   const system = buildCROAnalysisSystem(
     knowledgeBaseContext,
-    activeTestsContext
+    activeTestsContext,
+    brand
   )
 
   let textIntro = `Page: ${pagePath}

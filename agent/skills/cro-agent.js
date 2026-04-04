@@ -8,30 +8,83 @@ import {
   getCROMoneyPageMetrics,
   normalizeGa4PagePath
 } from '../lib/google.js'
-import { BRANDS } from './content-pipeline.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const CRO_KNOWLEDGE_FILE = path.join(
-  __dirname,
-  '..',
-  'data',
-  'cro-knowledge-base.json'
-)
+
+export const BRANDS = {
+  Docket: {
+    ga4PropertyId: '178229582',
+    baseUrl: 'https://www.yourdocket.com',
+    knowledgeFile: path.join(
+      __dirname,
+      '..',
+      'data',
+      'cro-knowledge-base-docket.json'
+    ),
+    pages: [
+      { path: '/dumpster-rental-software/', name: 'Dumpster Rental Software' },
+      {
+        path: '/dumpster-rental-software-ppc/',
+        name: 'Dumpster Rental Software PPC'
+      },
+      { path: '/schedule-a-demo/', name: 'Schedule a Demo' },
+      {
+        path: '/commercial-residential-waste/',
+        name: 'Commercial Residential Waste'
+      },
+      {
+        path: '/commercial-residential-ppc/',
+        name: 'Commercial Residential PPC'
+      },
+      { path: '/junk-removal-software/', name: 'Junk Removal Software' },
+      { path: '/ironroute-ai/', name: 'IronRoute AI' }
+    ]
+  },
+  ServiceCore: {
+    ga4PropertyId: '321097999',
+    baseUrl: 'https://servicecore.com',
+    knowledgeFile: path.join(
+      __dirname,
+      '..',
+      'data',
+      'cro-knowledge-base-servicecore.json'
+    ),
+    pages: [
+      {
+        path: '/portable-restroom-rental-software-ppc/',
+        name: 'Portable Restroom Software PPC'
+      },
+      { path: '/schedule-a-demo/', name: 'Schedule a Demo' },
+      {
+        path: '/grease-trap-pumping-software/',
+        name: 'Grease Trap Pumping Software'
+      },
+      {
+        path: '/portable-restroom-rental-software/',
+        name: 'Portable Restroom Rental Software'
+      },
+      {
+        path: '/septic-business-software/',
+        name: 'Septic Business Software'
+      },
+      {
+        path: '/septic-business-software-ppc/',
+        name: 'Septic Business Software PPC'
+      },
+      {
+        path: '/grease-trap-pumping-software-ppc/',
+        name: 'Grease Trap Pumping Software PPC'
+      }
+    ]
+  }
+}
+
+export const DOCKET_MONEY_PAGES = BRANDS.Docket.pages
+export const SERVICECORE_MONEY_PAGES = BRANDS.ServiceCore.pages
 
 const AGENT_NAME = 'cro-agent'
-const BRAND = 'Docket'
 
-const BASE_URL = 'https://www.yourdocket.com'
-
-export const DOCKET_MONEY_PAGES = [
-  { path: '/dumpster-rental-software/', name: 'Dumpster Rental Software' },
-  { path: '/dumpster-rental-software-ppc/', name: 'Dumpster Rental Software PPC' },
-  { path: '/schedule-a-demo/', name: 'Schedule a Demo' },
-  { path: '/commercial-residential-waste/', name: 'Commercial Residential Waste' },
-  { path: '/commercial-residential-ppc/', name: 'Commercial Residential PPC' },
-  { path: '/junk-removal-software/', name: 'Junk Removal Software' },
-  { path: '/ironroute-ai/', name: 'IronRoute AI' }
-]
+const CRO_BRAND_ORDER = ['Docket', 'ServiceCore']
 
 const SCREENSHOT_DIR = '/tmp/cro-screenshots'
 const CHROMIUM_PATH = '/usr/bin/chromium-browser'
@@ -156,18 +209,32 @@ function cleanupScreenshotDir() {
 }
 
 /**
- * Never throws to the Express process.
+ * @param {string} brandKey
  */
-export async function runCROAgent() {
-  const propertyId = BRANDS[BRAND]?.ga4PropertyId
-  const pagePaths = DOCKET_MONEY_PAGES.map((p) => p.path)
+async function runCROAgentForBrand(brandKey) {
+  const cfg = BRANDS[brandKey]
+  if (!cfg) {
+    await base44.log(
+      AGENT_NAME,
+      brandKey,
+      'error',
+      `Unknown CRO brand: ${brandKey}`
+    )
+    return
+  }
+
+  const propertyId = cfg.ga4PropertyId
+  const moneyPages = cfg.pages
+  const baseUrl = cfg.baseUrl
+  const knowledgeFile = cfg.knowledgeFile
+  const pagePaths = moneyPages.map((p) => p.path)
 
   try {
     await base44.log(
       AGENT_NAME,
-      BRAND,
+      brandKey,
       'info',
-      'Starting CRO agent for Docket'
+      `Starting CRO agent for ${brandKey}`
     )
 
     let maps = {
@@ -180,7 +247,7 @@ export async function runCROAgent() {
 
     try {
       if (!propertyId) {
-        throw new Error('Docket ga4PropertyId missing in BRANDS config')
+        throw new Error(`${brandKey} ga4PropertyId missing in BRANDS config`)
       }
       const raw = await getCROMoneyPageMetrics(propertyId, pagePaths)
       maps = {
@@ -192,13 +259,13 @@ export async function runCROAgent() {
     } catch (err) {
       ga4Failed = true
       const msg = err instanceof Error ? err.message : String(err)
-      await base44.log(AGENT_NAME, BRAND, 'error', msg)
+      await base44.log(AGENT_NAME, brandKey, 'error', msg)
     }
 
-    const nPagesData = ga4Failed ? 0 : DOCKET_MONEY_PAGES.length
+    const nPagesData = ga4Failed ? 0 : moneyPages.length
     await base44.log(
       AGENT_NAME,
-      BRAND,
+      brandKey,
       'info',
       `Pulled conversion data for ${nPagesData} pages`
     )
@@ -225,7 +292,7 @@ export async function runCROAgent() {
       const msg = err instanceof Error ? err.message : String(err)
       await base44.log(
         AGENT_NAME,
-        BRAND,
+        brandKey,
         'error',
         `Puppeteer launch failed: ${msg}`
       )
@@ -233,9 +300,9 @@ export async function runCROAgent() {
 
     if (browser) {
       try {
-        for (const { path: pagePath } of DOCKET_MONEY_PAGES) {
+        for (const { path: pagePath } of moneyPages) {
           const slug = pathToSlug(pagePath)
-          const url = `${BASE_URL.replace(/\/$/, '')}${pagePath.startsWith('/') ? pagePath : `/${pagePath}`}`
+          const url = `${baseUrl.replace(/\/$/, '')}${pagePath.startsWith('/') ? pagePath : `/${pagePath}`}`
           const mobileFile = path.join(SCREENSHOT_DIR, `${slug}-mobile.png`)
           const desktopFile = path.join(SCREENSHOT_DIR, `${slug}-desktop.png`)
           const entry = { mobile: null, desktop: null }
@@ -255,7 +322,7 @@ export async function runCROAgent() {
             const msg = err instanceof Error ? err.message : String(err)
             await base44.log(
               AGENT_NAME,
-              BRAND,
+              brandKey,
               'error',
               `Screenshot mobile ${pagePath}: ${msg}`
             )
@@ -277,7 +344,7 @@ export async function runCROAgent() {
             const msg = err instanceof Error ? err.message : String(err)
             await base44.log(
               AGENT_NAME,
-              BRAND,
+              brandKey,
               'error',
               `Screenshot desktop ${pagePath}: ${msg}`
             )
@@ -292,21 +359,21 @@ export async function runCROAgent() {
     }
 
     let capturedPages = 0
-    for (const { path: pagePath } of DOCKET_MONEY_PAGES) {
+    for (const { path: pagePath } of moneyPages) {
       const e = screenshotPaths.get(pagePath)
       if (e && (e.mobile || e.desktop)) capturedPages++
     }
     await base44.log(
       AGENT_NAME,
-      BRAND,
+      brandKey,
       'info',
       `Screenshots captured for ${capturedPages} pages`
     )
 
     let knowledgeBaseContext = 'No knowledge base on file.'
     try {
-      if (fs.existsSync(CRO_KNOWLEDGE_FILE)) {
-        knowledgeBaseContext = fs.readFileSync(CRO_KNOWLEDGE_FILE, 'utf8')
+      if (fs.existsSync(knowledgeFile)) {
+        knowledgeBaseContext = fs.readFileSync(knowledgeFile, 'utf8')
       }
     } catch {
       /* keep default */
@@ -314,7 +381,7 @@ export async function runCROAgent() {
 
     let activeTestsContext = 'No active tests.'
     try {
-      const tests = (await base44.getTestingRecommendations(BRAND)) ?? []
+      const tests = (await base44.getTestingRecommendations(brandKey)) ?? []
       activeTestsContext = tests.length
         ? JSON.stringify(tests, null, 2)
         : 'No active tests.'
@@ -325,7 +392,7 @@ export async function runCROAgent() {
     const recommendations = []
     const dateStr = todayEtYmd()
 
-    for (const { path: pagePath, name: pageName } of DOCKET_MONEY_PAGES) {
+    for (const { path: pagePath, name: pageName } of moneyPages) {
       const { byDevice, claudeRows } = buildDeviceBreakdown(
         pagePath,
         pageName,
@@ -346,7 +413,7 @@ export async function runCROAgent() {
         const msg = err instanceof Error ? err.message : String(err)
         await base44.log(
           AGENT_NAME,
-          BRAND,
+          brandKey,
           'error',
           `Read screenshot ${pagePath}: ${msg}`
         )
@@ -359,7 +426,8 @@ export async function runCROAgent() {
         mobileBase64,
         desktopBase64,
         knowledgeBaseContext,
-        activeTestsContext
+        activeTestsContext,
+        brand: brandKey
       })
 
       if (claudeResult) {
@@ -373,7 +441,7 @@ export async function runCROAgent() {
       }
 
       const snap = await base44.createCROSnapshot({
-        brand: BRAND,
+        brand: brandKey,
         page_path: pagePath,
         page_name: pageName,
         snapshot_date: dateStr,
@@ -394,14 +462,14 @@ export async function runCROAgent() {
       if (!snap) {
         await base44.log(
           AGENT_NAME,
-          BRAND,
+          brandKey,
           'error',
           `createCROSnapshot failed for ${pagePath}`
         )
       }
     }
 
-    await base44.log(AGENT_NAME, BRAND, 'info', 'CRO analysis complete')
+    await base44.log(AGENT_NAME, brandKey, 'info', 'CRO analysis complete')
 
     recommendations.sort((a, b) => {
       const pd = priorityScore(b.priority) - priorityScore(a.priority)
@@ -414,7 +482,7 @@ export async function runCROAgent() {
     const top = recommendations[0]
     if (top) {
       const rec = await base44.createCRORecommendation({
-        brand: BRAND,
+        brand: brandKey,
         page_path: top.page_path,
         page_name: top.page_name,
         observation: top.observation,
@@ -431,7 +499,7 @@ export async function runCROAgent() {
       if (!rec) {
         await base44.log(
           AGENT_NAME,
-          BRAND,
+          brandKey,
           'error',
           'createCRORecommendation failed'
         )
@@ -440,14 +508,23 @@ export async function runCROAgent() {
 
     await base44.log(
       AGENT_NAME,
-      BRAND,
+      brandKey,
       'success',
       'CRO snapshots and recommendation saved to Base44'
     )
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    await base44.log(AGENT_NAME, BRAND, 'error', msg)
+    await base44.log(AGENT_NAME, brandKey, 'error', msg)
   } finally {
     cleanupScreenshotDir()
+  }
+}
+
+/**
+ * Never throws to the Express process.
+ */
+export async function runCROAgent() {
+  for (const brandKey of CRO_BRAND_ORDER) {
+    await runCROAgentForBrand(brandKey)
   }
 }

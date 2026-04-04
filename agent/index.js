@@ -127,6 +127,7 @@ async function runCROKnowledge() {
   croKbLocked = true
   try {
     await updateCROKnowledgeBase('Docket')
+    await updateCROKnowledgeBase('ServiceCore')
   } finally {
     croKbLocked = false
   }

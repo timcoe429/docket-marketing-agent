@@ -519,6 +519,8 @@ const CRO_ANALYSIS_SYSTEM_TEMPLATE = `You are an expert CRO (Conversion Rate Opt
 
 The only conversion that matters is generate_lead (demo request form submissions).
 
+In the metrics JSON, treat conversion rate as generate_lead count divided by GA4 active users (not sessions), consistent with common Looker Studio explorations.
+
 You have access to a CRO knowledge base with current SaaS benchmarks and best practices:
 __KNOWLEDGE_BASE__
 
@@ -729,7 +731,7 @@ export async function analyzeCROPageJson({
   let textIntro = `Page: ${pagePath}
 Page name: ${pageName}
 
-Conversion rate data (JSON):
+Conversion rate data by device (active users and generate_lead counts; JSON):
 ${JSON.stringify(metricsJson, null, 2)}
 
 `

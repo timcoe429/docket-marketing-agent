@@ -288,7 +288,7 @@ const generateLeadEventFilter = {
   }
 }
 
-/** @returns {Map<string, number>} key `${normalizePath}|${device}` -> sessions */
+/** @returns {Map<string, number>} key `${normalizePath}|${device}` -> metric value (e.g. activeUsers for CRO) */
 function mapPathDeviceMetrics(response) {
   const m = new Map()
   for (const row of response.rows ?? []) {
@@ -316,12 +316,18 @@ function mapPathDeviceLeads(response) {
   return m
 }
 
-async function runCroSessionsWindow(client, propertyId, startDate, endDate, pathFilter) {
+async function runCroActiveUsersWindow(
+  client,
+  propertyId,
+  startDate,
+  endDate,
+  pathFilter
+) {
   const [response] = await client.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: 'pagePath' }, { name: 'deviceCategory' }],
-    metrics: [{ name: 'sessions' }],
+    metrics: [{ name: 'activeUsers' }],
     dimensionFilter: pathFilter,
     limit: 10000
   })
@@ -349,13 +355,14 @@ async function runCroLeadsWindow(client, propertyId, startDate, endDate, pathFil
 }
 
 /**
- * Sessions and generate_lead event counts per pagePath + device for two 14-day windows.
+ * Active users and generate_lead event counts per pagePath + device for two 14-day windows.
+ * Rates use conversions / activeUsers to align with typical Looker Studio explorations.
  * @param {string} propertyId
  * @param {string[]} pagePaths — money page paths from config
  * @returns {Promise<{
  *   ranges: { currentStart: string, currentEnd: string, previousStart: string, previousEnd: string },
- *   sessionsCurrent: Map<string, number>,
- *   sessionsPrevious: Map<string, number>,
+ *   activeUsersCurrent: Map<string, number>,
+ *   activeUsersPrevious: Map<string, number>,
  *   leadsCurrent: Map<string, number>,
  *   leadsPrevious: Map<string, number>
  * }>}
@@ -367,19 +374,19 @@ export async function getCROMoneyPageMetrics(propertyId, pagePaths) {
   const pathFilter = pagePathDimensionFilter(pagePaths)
 
   const [
-    sessionsCurrent,
-    sessionsPrevious,
+    activeUsersCurrent,
+    activeUsersPrevious,
     leadsCurrent,
     leadsPrevious
   ] = await Promise.all([
-    runCroSessionsWindow(
+    runCroActiveUsersWindow(
       client,
       propertyId,
       ranges.currentStart,
       ranges.currentEnd,
       pathFilter
     ),
-    runCroSessionsWindow(
+    runCroActiveUsersWindow(
       client,
       propertyId,
       ranges.previousStart,
@@ -404,8 +411,8 @@ export async function getCROMoneyPageMetrics(propertyId, pagePaths) {
 
   return {
     ranges,
-    sessionsCurrent,
-    sessionsPrevious,
+    activeUsersCurrent,
+    activeUsersPrevious,
     leadsCurrent,
     leadsPrevious
   }

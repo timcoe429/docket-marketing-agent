@@ -105,9 +105,9 @@ function todayEtYmd() {
   })
 }
 
-function ratePct(conversions, sessions) {
-  if (!sessions || sessions <= 0) return 0
-  return Math.round((conversions / sessions) * 10000) / 100
+function ratePct(conversions, activeUsers) {
+  if (!activeUsers || activeUsers <= 0) return 0
+  return Math.round((conversions / activeUsers) * 10000) / 100
 }
 
 /**
@@ -127,8 +127,8 @@ function lookupMaps(maps, pagePath, device) {
  * @param {string} pagePath
  * @param {string} pageName
  * @param {{
- *   sessionsCurrent: Map<string, number>,
- *   sessionsPrevious: Map<string, number>,
+ *   activeUsersCurrent: Map<string, number>,
+ *   activeUsersPrevious: Map<string, number>,
  *   leadsCurrent: Map<string, number>,
  *   leadsPrevious: Map<string, number>
  * }} maps
@@ -138,17 +138,25 @@ function buildDeviceBreakdown(pagePath, pageName, maps) {
   const claudeRows = []
 
   for (const device of DEVICES) {
-    const current_sessions = lookupMaps(maps.sessionsCurrent, pagePath, device)
-    const previous_sessions = lookupMaps(maps.sessionsPrevious, pagePath, device)
+    const current_active_users = lookupMaps(
+      maps.activeUsersCurrent,
+      pagePath,
+      device
+    )
+    const previous_active_users = lookupMaps(
+      maps.activeUsersPrevious,
+      pagePath,
+      device
+    )
     const current_conversions = lookupMaps(maps.leadsCurrent, pagePath, device)
     const previous_conversions = lookupMaps(maps.leadsPrevious, pagePath, device)
-    const current_rate = ratePct(current_conversions, current_sessions)
-    const previous_rate = ratePct(previous_conversions, previous_sessions)
+    const current_rate = ratePct(current_conversions, current_active_users)
+    const previous_rate = ratePct(previous_conversions, previous_active_users)
     const change_pct = changePctRates(current_rate, previous_rate)
 
     byDevice[device] = {
-      current_sessions,
-      previous_sessions,
+      current_active_users,
+      previous_active_users,
       current_conversions,
       previous_conversions,
       current_rate,
@@ -160,10 +168,10 @@ function buildDeviceBreakdown(pagePath, pageName, maps) {
       page: pagePath,
       name: pageName,
       device,
-      current_sessions,
+      current_active_users,
       current_conversions,
       current_rate,
-      previous_sessions,
+      previous_active_users,
       previous_conversions,
       previous_rate,
       change_pct
@@ -238,8 +246,8 @@ async function runCROAgentForBrand(brandKey) {
     )
 
     let maps = {
-      sessionsCurrent: new Map(),
-      sessionsPrevious: new Map(),
+      activeUsersCurrent: new Map(),
+      activeUsersPrevious: new Map(),
       leadsCurrent: new Map(),
       leadsPrevious: new Map()
     }
@@ -251,8 +259,8 @@ async function runCROAgentForBrand(brandKey) {
       }
       const raw = await getCROMoneyPageMetrics(propertyId, pagePaths)
       maps = {
-        sessionsCurrent: raw.sessionsCurrent,
-        sessionsPrevious: raw.sessionsPrevious,
+        activeUsersCurrent: raw.activeUsersCurrent,
+        activeUsersPrevious: raw.activeUsersPrevious,
         leadsCurrent: raw.leadsCurrent,
         leadsPrevious: raw.leadsPrevious
       }
@@ -445,15 +453,15 @@ async function runCROAgentForBrand(brandKey) {
         page_path: pagePath,
         page_name: pageName,
         snapshot_date: dateStr,
-        mobile_sessions: byDevice.mobile.current_sessions,
+        mobile_sessions: byDevice.mobile.current_active_users,
         mobile_conversions: byDevice.mobile.current_conversions,
         mobile_rate: byDevice.mobile.current_rate,
         mobile_change_pct: byDevice.mobile.change_pct,
-        desktop_sessions: byDevice.desktop.current_sessions,
+        desktop_sessions: byDevice.desktop.current_active_users,
         desktop_conversions: byDevice.desktop.current_conversions,
         desktop_rate: byDevice.desktop.current_rate,
         desktop_change_pct: byDevice.desktop.change_pct,
-        tablet_sessions: byDevice.tablet.current_sessions,
+        tablet_sessions: byDevice.tablet.current_active_users,
         tablet_conversions: byDevice.tablet.current_conversions,
         tablet_rate: byDevice.tablet.current_rate,
         tablet_change_pct: byDevice.tablet.change_pct

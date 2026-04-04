@@ -634,18 +634,14 @@ export async function generateCROKnowledgeBaseJson() {
     return null
   }
 
-  const cleaned = stripJsonFences(allText)
-  console.error('CROKnowledge raw (last 1000):', cleaned.slice(-1000))
-  console.error('CROKnowledge full length:', cleaned.length)
+  const lastText = stripJsonFences(allText)
 
   let parsed
   try {
-    parsed = JSON.parse(cleaned)
+    parsed = JSON.parse(lastText)
   } catch {
-    console.error(
-      'claude.generateCROKnowledgeBaseJson: raw response preview:',
-      cleaned.slice(0, 500)
-    )
+    console.error('CROKnowledge raw (last 1000):', lastText.slice(-1000))
+    console.error('CROKnowledge full length:', lastText.length)
     console.error('claude.generateCROKnowledgeBaseJson: invalid JSON from model')
     return null
   }

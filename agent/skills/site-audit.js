@@ -144,14 +144,16 @@ export async function runAuditForBrand(brand) {
 
     await base44.archiveOldAudits(brand)
 
-    // Base44 long-text fields: pillar_map, content_gaps, action_items must be JSON strings
+    const today = auditDateIso()
+    const auditResult = report
+
     const auditRow = await base44.createSiteAudit({
       brand,
-      audit_date: auditDateIso(),
-      summary: report.summary,
-      pillar_map: JSON.stringify(report.pillar_map),
-      content_gaps: JSON.stringify(report.content_gaps),
-      action_items: JSON.stringify(report.action_items),
+      audit_date: today,
+      summary: auditResult.summary,
+      pillar_map: JSON.stringify(auditResult.pillar_map),
+      content_gaps: JSON.stringify(auditResult.content_gaps),
+      action_items: JSON.stringify(auditResult.action_items),
       status: 'active'
     })
 

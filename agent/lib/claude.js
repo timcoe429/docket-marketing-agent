@@ -6,6 +6,9 @@ const anthropic = apiKey ? new Anthropic({ apiKey }) : null
 const CLAUDE_JSON_OUTPUT_CRITICAL =
   'CRITICAL: Return ONLY raw JSON. Do NOT use markdown code fences. Do NOT wrap in ```json or ```. Start your response with { and end with }. Any other format will cause a system failure.'
 
+const SITE_AUDIT_JSON_CRITICAL =
+  'CRITICAL: You MUST return ONLY raw JSON. Do NOT use markdown. Do NOT use backticks. Do NOT wrap in ```json. Start with { and end with }. No exceptions.'
+
 function systemPromptTodayLine() {
   const today = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
@@ -197,7 +200,9 @@ Respond with a single JSON object only.`
 }
 
 function buildSiteAuditSystemPrompt(brand, brandDescription, pillarsJoined) {
-  return `${CLAUDE_JSON_OUTPUT_CRITICAL}
+  return `${SITE_AUDIT_JSON_CRITICAL}
+
+${CLAUDE_JSON_OUTPUT_CRITICAL}
 
 ${systemPromptTodayLine()}
 
@@ -587,7 +592,7 @@ export async function generateCROKnowledgeBaseJson() {
     try {
       msg = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: buildCROKnowledgeSystem(),
         messages,
         tools: CRO_KNOWLEDGE_TOOLS

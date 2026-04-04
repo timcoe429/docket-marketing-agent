@@ -580,7 +580,6 @@ export async function generateCROKnowledgeBaseJson() {
     'Execute the research and respond with ONLY the JSON object described in your instructions. No markdown, no code fences.'
 
   const messages = [{ role: 'user', content: user }]
-  let lastText = ''
   const maxTurns = 8
 
   for (let turn = 0; turn < maxTurns; turn++) {
@@ -602,8 +601,6 @@ export async function generateCROKnowledgeBaseJson() {
     }
 
     messages.push({ role: 'assistant', content: msg.content })
-    const chunk = extractAssistantTextBlocks(msg.content)
-    if (chunk) lastText = chunk
 
     if (msg.stop_reason === 'end_turn' || msg.stop_reason === 'max_tokens') {
       break
@@ -623,18 +620,31 @@ export async function generateCROKnowledgeBaseJson() {
     break
   }
 
-  if (!lastText) {
+  const allText = messages
+    .filter((m) => m.role === 'assistant')
+    .flatMap((m) =>
+      Array.isArray(m.content) ? m.content : [{ type: 'text', text: m.content }]
+    )
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+
+  if (!allText.trim()) {
     console.error('claude.generateCROKnowledgeBaseJson: empty model text')
     return null
   }
 
+  const cleaned = stripJsonFences(allText)
+  console.error('CROKnowledge raw (last 1000):', cleaned.slice(-1000))
+  console.error('CROKnowledge full length:', cleaned.length)
+
   let parsed
   try {
-    parsed = JSON.parse(stripJsonFences(lastText))
+    parsed = JSON.parse(cleaned)
   } catch {
     console.error(
       'claude.generateCROKnowledgeBaseJson: raw response preview:',
-      lastText.slice(0, 500)
+      cleaned.slice(0, 500)
     )
     console.error('claude.generateCROKnowledgeBaseJson: invalid JSON from model')
     return null

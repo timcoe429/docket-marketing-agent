@@ -1,8 +1,7 @@
 import 'dotenv/config'
-import { execFile } from 'child_process'
+import { exec } from 'child_process'
 import crypto from 'crypto'
 import express from 'express'
-import { promisify } from 'util'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -12,8 +11,6 @@ const deployScript = join(repoRoot, 'deploy.sh')
 
 const WEBHOOK_PORT = Number(process.env.WEBHOOK_PORT) || 3001
 const secret = process.env.GITHUB_WEBHOOK_SECRET
-
-const execFileAsync = promisify(execFile)
 
 /**
  * @param {Buffer} rawBody
@@ -43,7 +40,7 @@ const app = express()
 app.post(
   '/deploy',
   express.raw({ type: 'application/json' }),
-  async (req, res) => {
+  (req, res) => {
     if (!secret) {
       console.error('GITHUB_WEBHOOK_SECRET is not set')
       return res.status(503).json({ ok: false, error: 'Webhook not configured' })
@@ -70,23 +67,15 @@ app.post(
       return res.json({ ok: true, skipped: true })
     }
 
-    try {
-      await execFileAsync('bash', [deployScript], {
-        cwd: repoRoot,
-        maxBuffer: 10 * 1024 * 1024
-      })
-      return res.json({ ok: true })
-    } catch (err) {
-      let message = err instanceof Error ? err.message : String(err)
-      if (typeof err === 'object' && err !== null) {
-        const stderr = 'stderr' in err ? String(err.stderr) : ''
-        const stdout = 'stdout' in err ? String(err.stdout) : ''
-        if (stderr.trim()) message = stderr.trim()
-        else if (stdout.trim()) message = stdout.trim()
+    res.json({ ok: true, message: 'Deploy started' })
+
+    exec(`bash ${deployScript}`, { cwd: repoRoot }, (err, stdout, stderr) => {
+      if (err) {
+        console.error('[webhook] deploy failed:', stderr || err.message)
+      } else {
+        console.log('[webhook] deploy ok')
       }
-      console.error('Deploy failed:', message)
-      return res.status(500).json({ ok: false, error: message })
-    }
+    })
   }
 )
 

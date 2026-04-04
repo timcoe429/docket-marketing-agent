@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import puppeteer from 'puppeteer-core'
 import * as base44 from '../lib/base44.js'
 import { analyzeCROPageJson } from '../lib/claude.js'
@@ -8,6 +9,14 @@ import {
   normalizeGa4PagePath
 } from '../lib/google.js'
 import { BRANDS } from './content-pipeline.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const CRO_KNOWLEDGE_FILE = path.join(
+  __dirname,
+  '..',
+  'data',
+  'cro-knowledge-base.json'
+)
 
 const AGENT_NAME = 'cro-agent'
 const BRAND = 'Docket'
@@ -296,8 +305,9 @@ export async function runCROAgent() {
 
     let knowledgeBaseContext = 'No knowledge base on file.'
     try {
-      const kb = await base44.getCROKnowledgeBase(BRAND)
-      if (kb?.content) knowledgeBaseContext = String(kb.content)
+      if (fs.existsSync(CRO_KNOWLEDGE_FILE)) {
+        knowledgeBaseContext = fs.readFileSync(CRO_KNOWLEDGE_FILE, 'utf8')
+      }
     } catch {
       /* keep default */
     }

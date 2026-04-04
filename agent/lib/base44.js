@@ -352,8 +352,6 @@ export async function getCROKnowledgeBase(brand) {
 
 export async function upsertCROKnowledgeBase({
   brand,
-  content,
-  benchmarks,
   last_updated,
   summary
 }) {
@@ -362,7 +360,7 @@ export async function upsertCROKnowledgeBase({
     const { data: raw } = await client.get(path)
     const list = normalizeList(raw)
     const existing = list.find((r) => r && r.brand === brand)
-    const body = { brand, content, benchmarks, last_updated, summary }
+    const body = { brand, last_updated, summary }
 
     if (existing) {
       const id = recordId(existing)

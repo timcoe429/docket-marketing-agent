@@ -168,6 +168,8 @@ Respond with a single JSON object only.`
     parsed = JSON.parse(stripJsonFences(text))
   } catch {
     console.error('claude.generateBlogPostJson: invalid JSON from model')
+    console.error('generateBlogPostJson: raw response (first 500):', text.slice(0, 500))
+    console.error('generateBlogPostJson: stop_reason:', message.stop_reason)
     return null
   }
 
@@ -180,6 +182,9 @@ Respond with a single JSON object only.`
     typeof parsed.content !== 'string' ||
     typeof parsed.faq_schema !== 'string'
   ) {
+    console.error('generateBlogPostJson: parsed keys:', parsed ? Object.keys(parsed) : 'null')
+    console.error('generateBlogPostJson: meta_title:', parsed?.meta_title?.slice(0, 50))
+    console.error('generateBlogPostJson: faq_schema length:', parsed?.faq_schema?.length)
     console.error('claude.generateBlogPostJson: missing required keys')
     return null
   }

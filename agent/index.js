@@ -4,6 +4,7 @@ import cron from 'node-cron'
 import * as base44 from './lib/base44.js'
 import {
   BRANDS as BRAND_CONFIG,
+  publishApprovedPosts,
   publishToWordPress,
   runForBrand
 } from './skills/content-pipeline.js'
@@ -20,6 +21,7 @@ let pipelineLocked = false
 let auditLocked = false
 let croLocked = false
 let croKbLocked = false
+let approvedPublishLocked = false
 
 /** @type {Record<string, string>} */
 const agentIdByBrand = {}
@@ -223,6 +225,22 @@ cron.schedule(
   '0 7 1 * *',
   () => {
     void runCROKnowledge()
+  },
+  { timezone: 'America/New_York' }
+)
+
+cron.schedule(
+  '*/5 * * * *',
+  async () => {
+    if (approvedPublishLocked) return
+    approvedPublishLocked = true
+    try {
+      await publishApprovedPosts()
+    } catch (err) {
+      console.error('publishApprovedPosts:', err)
+    } finally {
+      approvedPublishLocked = false
+    }
   },
   { timezone: 'America/New_York' }
 )

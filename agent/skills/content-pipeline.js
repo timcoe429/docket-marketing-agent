@@ -455,3 +455,71 @@ export async function publishToWordPress(blogPostId, brand) {
     return { ok: false, error: String(msg) }
   }
 }
+
+/** Same shape handling as base44.normalizeList (not exported from base44). */
+function normalizeBlogPostListResponse(data) {
+  if (Array.isArray(data)) return data
+  if (data && Array.isArray(data.data)) return data.data
+  if (data && Array.isArray(data.items)) return data.items
+  if (data && Array.isArray(data.records)) return data.records
+  if (data && Array.isArray(data.results)) return data.results
+  return []
+}
+
+const POLL_AGENT = 'content-agent-poll'
+
+/**
+ * Poll Base44 for BlogPost rows with status approved and push each to WordPress as draft.
+ * Silent when none approved. List fetch errors go to console only.
+ */
+export async function publishApprovedPosts() {
+  const baseUrl = process.env.BASE44_API_BASE_URL || 'https://app.base44.com'
+  const appId = process.env.BASE44_APP_ID || '69c933514906e97b30004421'
+  const listUrl = `${baseUrl.replace(/\/$/, '')}/api/apps/${appId}/entities/BlogPost`
+
+  let raw
+  try {
+    const headers = { 'Content-Type': 'application/json' }
+    if (process.env.BASE44_API_KEY) {
+      headers.api_key = process.env.BASE44_API_KEY
+    }
+    const { data } = await axios.get(listUrl, { headers, timeout: 60000 })
+    raw = data
+  } catch (err) {
+    console.error(
+      'publishApprovedPosts: Base44 list failed:',
+      err.response?.data ?? err.message
+    )
+    return
+  }
+
+  const approved = normalizeBlogPostListResponse(raw).filter(
+    (row) =>
+      row && String(row.status || '').toLowerCase() === 'approved'
+  )
+  if (approved.length === 0) return
+
+  for (const row of approved) {
+    const id = row.id ?? row._id ?? row.entityId
+    if (id == null || id === '') {
+      await base44.log(
+        POLL_AGENT,
+        'System',
+        'error',
+        'publishApprovedPosts: approved BlogPost row has no id, skip'
+      )
+      continue
+    }
+    const brand = row.brand
+    if (!brand || !BRANDS[brand]) {
+      await base44.log(
+        POLL_AGENT,
+        String(brand ?? 'unknown'),
+        'error',
+        `publishApprovedPosts: unknown or missing brand for BlogPost ${id}, skip`
+      )
+      continue
+    }
+    await publishToWordPress(String(id), brand)
+  }
+}

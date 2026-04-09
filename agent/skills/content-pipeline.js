@@ -485,6 +485,23 @@ export async function publishApprovedPosts() {
     }
     const { data } = await axios.get(listUrl, { headers, timeout: 60000 })
     raw = data
+    console.log('[publishApprovedPosts] raw response diagnostic:', {
+      type:
+        raw === null || raw === undefined
+          ? String(raw)
+          : Array.isArray(raw)
+            ? 'array'
+            : typeof raw,
+      arrayLength: Array.isArray(raw) ? raw.length : undefined,
+      objectKeys:
+        raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? Object.keys(raw)
+          : undefined,
+      jsonPreview:
+        raw !== null && raw !== undefined
+          ? JSON.stringify(raw).slice(0, 1500)
+          : undefined
+    })
   } catch (err) {
     console.error(
       'publishApprovedPosts: Base44 list failed:',
@@ -493,9 +510,17 @@ export async function publishApprovedPosts() {
     return
   }
 
-  const approved = normalizeBlogPostListResponse(raw).filter(
+  const normalizedList = normalizeBlogPostListResponse(raw)
+  const approved = normalizedList.filter(
     (row) =>
       row && String(row.status || '').toLowerCase() === 'approved'
+  )
+  console.log(
+    '[publishApprovedPosts] after filter:',
+    'normalizedLength=',
+    normalizedList.length,
+    'approvedCount=',
+    approved.length
   )
   if (approved.length === 0) return
 

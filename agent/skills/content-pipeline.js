@@ -400,7 +400,12 @@ export async function publishToWordPress(blogPostId, brand) {
       {
         title,
         content,
-        status: 'draft'
+        status: 'draft',
+        meta: {
+          _yoast_wpseo_title: post.meta_title || '',
+          _yoast_wpseo_metadesc: post.meta_description || '',
+          _yoast_wpseo_focuskw: post.keyword || ''
+        }
       },
       {
         headers: {

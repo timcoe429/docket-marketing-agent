@@ -91,13 +91,65 @@ SEO REQUIREMENTS:
 - Meta description: 150-160 characters, include keyword, compelling reason to click
 - The target keyword should appear in: H1, first 100 words, at least 2 H2s, meta title, meta description
 
-HTML REQUIREMENTS:
-- Return clean semantic HTML for the content field
-- Use <h1>, <h2>, <h3>, <p>, <ul>, <li>, <aside>, <strong> tags appropriately
-- Key Takeaways: <aside class="key-takeaways"><h2>Key Takeaways</h2><ul>...</ul></aside>
-- Internal links: <a href="URL">anchor text</a> — use descriptive anchor text with keywords
-- FAQ section: wrap each Q&A in <div class="faq-item"><h3>Question</h3><p>Answer</p></div>
-- Wrap entire FAQ in <section class="faq-section"><h2>Frequently Asked Questions</h2>...</section>
+GUTENBERG BLOCK REQUIREMENTS:
+The content field must be valid WordPress Gutenberg block markup. Every element must be wrapped in the correct block comment delimiters so WordPress parses it as native blocks — not a Classic block.
+
+Rules:
+- Paragraphs:
+  <!-- wp:paragraph -->
+  <p>Text here.</p>
+  <!-- /wp:paragraph -->
+
+- H2 headings:
+  <!-- wp:heading -->
+  <h2 class="wp-block-heading">Heading text</h2>
+  <!-- /wp:heading -->
+
+- H3 headings:
+  <!-- wp:heading {"level":3} -->
+  <h3 class="wp-block-heading">Heading text</h3>
+  <!-- /wp:heading -->
+
+- Unordered lists:
+  <!-- wp:list -->
+  <ul class="wp-block-list"><!-- wp:list-item -->
+  <li>Item</li>
+  <!-- /wp:list-item --></ul>
+  <!-- /wp:list -->
+
+- Key Takeaways box — use a Group block with a custom className:
+  <!-- wp:group {"className":"key-takeaways"} -->
+  <div class="wp-block-group key-takeaways">
+  <!-- wp:heading {"level":3} -->
+  <h3 class="wp-block-heading">Key Takeaways</h3>
+  <!-- /wp:heading -->
+  <!-- wp:list -->
+  <ul class="wp-block-list"><!-- wp:list-item -->
+  <li>Takeaway one</li>
+  <!-- /wp:list-item --></ul>
+  <!-- /wp:list -->
+  </div>
+  <!-- /wp:group -->
+
+- FAQ section — each Q&A pair as heading + paragraph, all wrapped in a Group block:
+  <!-- wp:group {"className":"faq-section"} -->
+  <div class="wp-block-group faq-section">
+  <!-- wp:heading {"level":2} -->
+  <h2 class="wp-block-heading">Frequently Asked Questions</h2>
+  <!-- /wp:heading -->
+  <!-- wp:heading {"level":3} -->
+  <h3 class="wp-block-heading">Question text?</h3>
+  <!-- /wp:heading -->
+  <!-- wp:paragraph -->
+  <p>Answer text.</p>
+  <!-- /wp:paragraph -->
+  </div>
+  <!-- /wp:group -->
+
+- Internal links inside paragraphs: standard <a href="URL">anchor text</a> inside a wp:paragraph block
+- Bold: <strong> inside a wp:paragraph block
+- Do NOT output a wp:heading for the H1 title — the title field handles that separately
+- Do NOT wrap the entire content in an outer block — output a flat sequence of blocks
 
 Return ONLY valid JSON with these exact fields:
 {

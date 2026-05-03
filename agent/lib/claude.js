@@ -216,13 +216,21 @@ Respond with a single JSON object only.`
 
   const text = message.content[0].type === 'text' ? message.content[0].text : ''
   let parsed
+  const cleaned = stripJsonFences(text)
   try {
-    parsed = JSON.parse(stripJsonFences(text))
-  } catch {
-    console.error('claude.generateBlogPostJson: invalid JSON from model')
-    console.error('generateBlogPostJson: raw response (first 500):', text.slice(0, 500))
-    console.error('generateBlogPostJson: stop_reason:', message.stop_reason)
-    return null
+    parsed = JSON.parse(cleaned)
+  } catch (e1) {
+    // Attempt to extract just the outer JSON object by finding the last }
+    // and retrying — handles cases where trailing content breaks parse
+    try {
+      const lastBrace = cleaned.lastIndexOf('}')
+      parsed = JSON.parse(cleaned.slice(0, lastBrace + 1))
+    } catch {
+      console.error('claude.generateBlogPostJson: invalid JSON from model')
+      console.error('generateBlogPostJson: raw response (first 500):', text.slice(0, 500))
+      console.error('generateBlogPostJson: stop_reason:', message.stop_reason)
+      return null
+    }
   }
 
   if (
